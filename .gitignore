@@ -38,4 +38,3 @@ build
 install
 .cache
 .vscode
-.clang-format
