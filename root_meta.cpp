@@ -9,7 +9,6 @@
 #include <string_view>
 
 #include "coding.h"
-#include "crc32.h"
 #include "page_mapper.h"
 
 namespace kvstore
@@ -51,27 +50,15 @@ std::string_view ManifestBuilder::Finalize(uint32_t new_root)
 
     EncodeFixed32(buff_.data() + offset_root, new_root);
 
-    uint32_t crc =
-        crc32::Value(buff_.data() + crc_bytes, buff_.size() - crc_bytes);
-    EncodeFixed32(buff_.data(), crc32::Mask(crc));
+    uint64_t checksum = XXH3_64bits(buff_.data() + checksum_bytes,
+                                    buff_.size() - checksum_bytes);
+    EncodeFixed64(buff_.data(), checksum);
     return buff_;
 }
 
 std::string_view ManifestBuilder::BuffView() const
 {
     return buff_;
-}
-
-std::string ManifestBuilder::EmptySnapshot()
-{
-    std::string snap;
-    snap.resize(header_bytes);
-    EncodeFixed32(snap.data() + offset_len, 0);
-    EncodeFixed32(snap.data() + offset_root, UINT32_MAX);
-    uint32_t crc =
-        crc32::Value(snap.data() + crc_bytes, header_bytes - crc_bytes);
-    EncodeFixed32(snap.data(), crc32::Mask(crc));
-    return snap;
 }
 
 bool RootMeta::Evict()

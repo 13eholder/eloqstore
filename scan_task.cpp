@@ -33,6 +33,7 @@ KvError ScanTask::Scan(const TableIdent &tbl_id,
     err = index_mgr->SeekIndex(
         mapping.get(), tbl_id, meta->root_page_, begin_key, page_id);
     CHECK_KV_ERR(err);
+    assert(page_id != UINT32_MAX);
     uint32_t file_page = mapping->ToFilePage(page_id);
     auto [page, err_load] = LoadDataPage(tbl_id, page_id, file_page);
     CHECK_KV_ERR(err_load);

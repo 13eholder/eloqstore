@@ -129,7 +129,7 @@ std::pair<Page, KvError> IouringMgr::ReadPage(const TableIdent &tbl_id,
         return {std::move(page), ToKvError(res)};
     }
 
-    if (!ValidatePageCrc32(page.get(), options_->data_page_size))
+    if (!ValidatePageChecksum(page.get(), options_->data_page_size))
     {
         LOG(ERROR) << "corrupted " << tbl_id << " page " << fp_id;
         return {std::move(page), KvError::Corrupted};
@@ -171,7 +171,7 @@ KvError IouringMgr::WritePage(const TableIdent &tbl_id,
     EncodeUserData(sqe, req, UserDataType::AsynWriteReq);
 
     char *ptr = req->PagePtr();
-    SetPageCrc32(ptr, Options()->data_page_size);
+    SetPageChecksum(ptr, Options()->data_page_size);
     io_uring_prep_write(sqe, fd, ptr, options_->data_page_size, offset);
     req->fd_ref_ = std::move(fd_ref);
     return KvError::NoError;

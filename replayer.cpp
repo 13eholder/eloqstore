@@ -10,7 +10,6 @@
 
 #include "async_io_manager.h"
 #include "coding.h"
-#include "crc32.h"
 #include "error.h"
 #include "kv_options.h"
 #include "root_meta.h"
@@ -74,11 +73,11 @@ KvError Replayer::NextRecord(ManifestFile *log)
     mapping_ = {log_buf_.data() + ManifestBuilder::header_bytes,
                 log_buf_.size() - ManifestBuilder::header_bytes};
 
-    uint32_t crc_stored = DecodeFixed32(log_buf_.data());
-    crc_stored = crc32::Unmask(crc_stored);
-    uint32_t crc = crc32::Value(log_buf_.data() + ManifestBuilder::crc_bytes,
-                                log_buf_.size() - ManifestBuilder::crc_bytes);
-    if (crc != crc_stored)
+    uint64_t checksum_stored = DecodeFixed64(log_buf_.data());
+    uint64_t checksum =
+        XXH3_64bits(log_buf_.data() + ManifestBuilder::checksum_bytes,
+                    log_buf_.size() - ManifestBuilder::checksum_bytes);
+    if (checksum != checksum_stored)
     {
         return KvError::Corrupted;
     }

@@ -23,13 +23,12 @@ public:
     std::string_view BuffView() const;
     void Reset();
     bool Empty() const;
-    static std::string EmptySnapshot();
 
-    // crc32(4B), root_page_id(4B), log_size(4B)
-    static constexpr uint16_t crc_bytes = 4;
-    static constexpr uint16_t header_bytes = crc_bytes + 8;
+    // checksum(8B), root_page_id(4B), log_size(4B)
+    static constexpr uint16_t checksum_bytes = 8;
+    static constexpr uint16_t header_bytes = checksum_bytes + 8;
 
-    static constexpr uint16_t offset_root = crc_bytes;
+    static constexpr uint16_t offset_root = checksum_bytes;
     static constexpr uint16_t offset_len = offset_root + 4;
 
 private:

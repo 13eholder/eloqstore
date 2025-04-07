@@ -59,7 +59,7 @@ set(ELOQ_STORE_SOURCES
     eloq_store.cpp
     root_meta.cpp
     replayer.cpp
-    crc32.cpp)
+    xxhash.c)
 
 add_library(eloqstore STATIC ${ELOQ_STORE_SOURCES})
 

@@ -5,12 +5,12 @@
 #include <vector>
 
 #include "coding.h"
-#include "crc32.h"
+#include "xxhash.h"
 
 namespace kvstore
 {
-static uint16_t const page_crc_offset = 0;
-static uint16_t const page_type_offset = page_crc_offset + sizeof(uint32_t);
+constexpr uint8_t checksum_bytes = 8;
+static uint16_t const page_type_offset = checksum_bytes;
 
 enum struct PageType : uint8_t
 {
@@ -30,21 +30,21 @@ inline static void SetPageType(char *p, PageType t)
     p[page_type_offset] = static_cast<char>(t);
 }
 
-inline static uint32_t Crc32OfPage(const char *p)
+inline static uint64_t GetPageChecksum(const char *p)
 {
-    return crc32::Unmask(DecodeFixed32(p + page_crc_offset));
+    return DecodeFixed64(p);
 }
 
-inline static void SetPageCrc32(char *p, uint16_t pgsz)
+inline static void SetPageChecksum(char *p, uint16_t pgsz)
 {
-    uint32_t crc = crc32::Value(p + page_type_offset, pgsz - page_type_offset);
-    EncodeFixed32(p + page_crc_offset, crc32::Mask(crc));
+    uint64_t checksum = XXH3_64bits(p + checksum_bytes, pgsz - checksum_bytes);
+    EncodeFixed64(p, checksum);
 }
 
-inline static bool ValidatePageCrc32(char *p, uint16_t pgsz)
+inline static bool ValidatePageChecksum(char *p, uint16_t pgsz)
 {
-    uint32_t crc = crc32::Value(p + page_type_offset, pgsz - page_type_offset);
-    return crc == Crc32OfPage(p);
+    uint64_t checksum = XXH3_64bits(p + checksum_bytes, pgsz - checksum_bytes);
+    return checksum == GetPageChecksum(p);
 }
 
 inline static size_t page_align = sysconf(_SC_PAGESIZE);

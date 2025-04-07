@@ -165,7 +165,6 @@ void IndexPageManager::UpdateRoot(const TableIdent &tbl_ident,
                                   std::unique_ptr<PageMapper> new_mapper,
                                   uint64_t manifest_size)
 {
-    assert(!new_root->IsDetached());
     auto tbl_it = tbl_roots_.find(tbl_ident);
     assert(tbl_it != tbl_roots_.end());
     RootMeta &meta = tbl_it->second;

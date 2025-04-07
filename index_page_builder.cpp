@@ -186,7 +186,8 @@ size_t IndexPageBuilder::HeaderSize()
 {
     // 1 byte for the page type and the following 8 bytes for the leftmost
     // pointer.
-    return 4 + 1 +             // 4 bytes for crc, 1 byte for the page type
+    return checksum_bytes +    // 8 bytes for checksum
+           1 +                 // 1 byte for the page type
            sizeof(uint16_t) +  // 2 bytes for content size
            sizeof(uint32_t);   // 4 bytes for leftmost pointer
 }
