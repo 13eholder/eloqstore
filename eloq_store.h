@@ -71,13 +71,36 @@ public:
     {
         return RequestType::Scan;
     }
-    void SetArgs(TableIdent tid, std::string_view begin, std::string_view end);
+    /**
+     * @brief Set the scan range.
+     * @param tbl_id Table partition identifier.
+     * @param begin The begin key of the scan range.
+     * @param end The end key of the scan range (not inclusive).
+     * @param begin_inclusive Whether the begin key is inclusive.
+     */
+    void SetArgs(TableIdent tbl_id,
+                 std::string_view begin,
+                 std::string_view end,
+                 bool begin_inclusive = true);
+
+    /**
+     * @brief Set the pagination of the scan result.
+     * @param entries Limit the number of entries in one page.
+     * @param size Limit the page size (byte).
+     */
+    void SetPagination(size_t entries, size_t size);
+
+    size_t ResultSize() const;
 
     // input
+    bool begin_inclusive_;
     std::string_view begin_key_;
     std::string_view end_key_;
+    size_t page_entries_{SIZE_MAX};
+    size_t page_size_{SIZE_MAX};
     // output
     std::vector<KvEntry> entries_;
+    bool has_remaining_;
 };
 
 class WriteRequest : public KvRequest

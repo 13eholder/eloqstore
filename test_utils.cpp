@@ -225,33 +225,64 @@ void MapVerifier::Read(std::string_view key)
     }
 }
 
-void MapVerifier::Scan(uint64_t begin, uint64_t end)
+void MapVerifier::Scan(uint64_t begin,
+                       uint64_t end,
+                       size_t page_entries,
+                       size_t page_size)
 {
-    Scan(Key(begin), Key(end));
+    Scan(Key(begin), Key(end), page_entries, page_size);
 }
 
-void MapVerifier::Scan(std::string_view begin, std::string_view end)
+void MapVerifier::Scan(std::string_view begin,
+                       std::string_view end,
+                       size_t page_entries,
+                       size_t page_size)
 {
     LOG(INFO) << "Scan(" << begin << ',' << end << ')';
 
+    kvstore::ScanRequest req;
+    req.SetPagination(page_entries, page_size);
     std::string begin_key(begin);
     std::string end_key(end);
-    kvstore::ScanRequest req;
+
     req.SetArgs(tid_, begin_key, end_key);
-    eloq_store_->ExecSync(&req);
-    if (req.Error() == kvstore::KvError::NoError)
+    while (true)
     {
+        eloq_store_->ExecSync(&req);
+        if (req.Error() != kvstore::KvError::NoError)
+        {
+            CHECK(req.Error() == kvstore::KvError::NotFound);
+            CHECK(answer_.empty());
+            break;
+        }
+
+        // Verify scan result
+        CHECK(req.entries_.size() <= req.page_entries_);
+        CHECK(req.ResultSize() <= req.page_size_ || req.entries_.size() == 1);
         auto it = answer_.lower_bound(begin_key);
+        if (!req.begin_inclusive_)
+        {
+            assert(it->first == begin_key);
+            it++;
+        }
         for (auto &t : req.entries_)
         {
             CheckKvEntry(t, it->second);
             it++;
         }
-    }
-    else
-    {
-        CHECK(req.Error() == kvstore::KvError::NotFound);
-        CHECK(answer_.empty());
+
+        if (!req.has_remaining_)
+        {
+            if (it != answer_.end())
+            {
+                CHECK(it->first >= end_key);
+            }
+            break;
+        }
+        // Continue scan the next page.
+        CHECK(!req.entries_.empty());
+        begin_key = std::get<0>(req.entries_.back());
+        req.SetArgs(tid_, begin_key, end_key, false);
     }
 }
 
@@ -482,7 +513,7 @@ void ConcurrencyTester::VerifyRead(Reader *reader)
 std::string ConcurrencyTester::DebugSegment(
     uint32_t partition_id,
     uint16_t seg_id,
-    const std::vector<kvstore::KvEntry> *resp)
+    const std::vector<kvstore::KvEntry> *resp) const
 {
     const Partition &partition = partitions_[partition_id];
     const uint32_t begin = seg_id * seg_size_;

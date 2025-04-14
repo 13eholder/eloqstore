@@ -27,7 +27,11 @@ public:
     KvError Scan(const TableIdent &tbl_id,
                  std::string_view begin_key,
                  std::string_view end_key,
-                 std::vector<KvEntry> &entries);
+                 bool begin_inclusive,
+                 size_t page_entries,
+                 size_t page_size,
+                 std::vector<KvEntry> &result,
+                 bool &has_remaining);
     TaskType Type() const override
     {
         return TaskType::Scan;

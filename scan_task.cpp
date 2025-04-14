@@ -17,9 +17,15 @@ ScanTask::ScanTask() : iter_(nullptr, Options())
 KvError ScanTask::Scan(const TableIdent &tbl_id,
                        std::string_view begin_key,
                        std::string_view end_key,
-                       std::vector<KvEntry> &entries)
+                       bool begin_inclusive,
+                       size_t page_entries,
+                       size_t page_size,
+                       std::vector<KvEntry> &result,
+                       bool &has_remaining)
 {
-    entries.clear();
+    result.clear();
+    has_remaining = false;
+    size_t result_size = 0;
 
     auto [meta, err] = index_mgr->FindRoot(tbl_id);
     CHECK_KV_ERR(err);
@@ -43,22 +49,52 @@ KvError ScanTask::Scan(const TableIdent &tbl_id,
     iter_.Seek(begin_key);
     if (iter_.Key().empty() && (err = Next(mapping.get())) != KvError::NoError)
     {
-        return err == KvError::EndOfFile ? KvError::NoError : err;
+        goto End;
     }
+    if (!begin_inclusive && Comp()->Compare(iter_.Key(), begin_key) == 0 &&
+        (err = Next(mapping.get())) != KvError::NoError)
+    {
+        goto End;
+    }
+
     while (end_key.empty() || Comp()->Compare(iter_.Key(), end_key) < 0)
     {
+        // Check entries number limit.
+        if (result.size() == page_entries)
+        {
+            has_remaining = true;
+            break;
+        }
+
+        // Fetch value
         std::string value;
         if (iter_.IsOverflow())
         {
             auto ret = GetOverflowValue(tbl_id, mapping.get(), iter_.Value());
-            CHECK_KV_ERR(ret.second);
+            err = ret.second;
+            if (err != KvError::NoError)
+            {
+                assert(err != KvError::EndOfFile);
+                break;
+            }
             value = std::move(ret.first);
         }
         else
         {
             value = iter_.Value();
         }
-        entries.emplace_back(iter_.Key(), std::move(value), iter_.Timestamp());
+
+        // Check result size limit.
+        size_t entry_size =
+            iter_.Key().size() + value.size() + sizeof(uint64_t);
+        if (result_size > 0 && result_size + entry_size > page_size)
+        {
+            has_remaining = true;
+            break;
+        }
+        result_size += entry_size;
+
+        result.emplace_back(iter_.Key(), std::move(value), iter_.Timestamp());
 
         err = Next(mapping.get());
         if (err != KvError::NoError)
@@ -66,6 +102,8 @@ KvError ScanTask::Scan(const TableIdent &tbl_id,
             break;
         }
     }
+End:
+    data_page_.Clear();
     return err == KvError::EndOfFile ? KvError::NoError : err;
 }
 

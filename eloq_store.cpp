@@ -274,13 +274,31 @@ void ReadRequest::SetArgs(TableIdent tid, std::string_view key)
     key_ = key;
 }
 
-void ScanRequest::SetArgs(TableIdent tid,
+void ScanRequest::SetArgs(TableIdent tbl_id,
                           std::string_view begin,
-                          std::string_view end)
+                          std::string_view end,
+                          bool begin_inclusive)
 {
-    tbl_id_ = std::move(tid);
+    tbl_id_ = std::move(tbl_id);
     begin_key_ = begin;
     end_key_ = end;
+    begin_inclusive_ = begin_inclusive;
+}
+
+void ScanRequest::SetPagination(size_t entries, size_t size)
+{
+    page_entries_ = entries != 0 ? entries : SIZE_MAX;
+    page_size_ = size != 0 ? size : SIZE_MAX;
+}
+
+size_t ScanRequest::ResultSize() const
+{
+    size_t size = 0;
+    for (const auto &[k, v, _] : entries_)
+    {
+        size += k.size() + v.size() + sizeof(uint64_t);
+    }
+    return size;
 }
 
 void WriteRequest::SetArgs(TableIdent tid, std::vector<WriteDataEntry> &&batch)
@@ -450,7 +468,11 @@ void Worker::HandleReq(KvRequest *req)
             return task->Scan(req->TableId(),
                               scan_req->begin_key_,
                               scan_req->end_key_,
-                              scan_req->entries_);
+                              scan_req->begin_inclusive_,
+                              scan_req->page_entries_,
+                              scan_req->page_size_,
+                              scan_req->entries_,
+                              scan_req->has_remaining_);
         };
         StartTask(task, req, lbd);
         break;

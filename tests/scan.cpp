@@ -54,3 +54,22 @@ TEST_CASE("random write and scan", "[scan]")
         }
     }
 }
+
+TEST_CASE("paginate the scan results", "[scan]")
+{
+    InitMemStore();
+    MapVerifier verify(test_tbl_id, memstore.get(), false);
+    verify.SetValueSize(100);
+    verify.WriteRnd(0, 10000, 0, 90);
+    // Paginate by entries amount.
+    verify.Scan(0, 10000, 1000);
+    // Paginate by result size.
+    verify.Scan(0, 10000, 0, 10000);
+    // Paginate by entries amount and size.
+    verify.Scan(0, 10000, 100, 5000);
+
+    // Paginate with overflow value.
+    verify.SetValueSize(10000);
+    verify.Upsert(1, 3);
+    verify.Scan(0, 10, 0, 1000);
+}

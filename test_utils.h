@@ -50,8 +50,14 @@ public:
 
     void Read(uint64_t key);
     void Read(std::string_view key);
-    void Scan(uint64_t begin, uint64_t end);
-    void Scan(std::string_view begin, std::string_view end);
+    void Scan(uint64_t begin,
+              uint64_t end,
+              size_t page_entries = 0,
+              size_t page_size = 0);
+    void Scan(std::string_view begin,
+              std::string_view end,
+              size_t page_entries = 0,
+              size_t page_size = 0);
 
     void Validate();
     void SetAutoValidate(bool v);
@@ -113,11 +119,11 @@ private:
     void Wake(kvstore::KvRequest *req);
     void ExecRead(Reader *reader);
     void VerifyRead(Reader *reader);
+    void ExecWrite(Partition &partition);
+
     std::string DebugSegment(uint32_t partition_id,
                              uint16_t seg_id,
-                             const std::vector<kvstore::KvEntry> *resp);
-    void ExecWrite(Partition &partition);
-    bool AllTasksDone(uint32_t rounds) const;
+                             const std::vector<kvstore::KvEntry> *resp) const;
 
     const uint8_t seg_size_;
     const uint16_t seg_count_;
