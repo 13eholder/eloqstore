@@ -1,7 +1,6 @@
 #include "replayer.h"
 
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -55,22 +54,16 @@ KvError Replayer::Replay(ManifestFilePtr log, const KvOptions *opts)
 
 KvError Replayer::NextRecord(ManifestFile *log)
 {
-    size_t nread = log->Read(log_buf_.data(), ManifestBuilder::header_bytes);
-    if (nread < ManifestBuilder::header_bytes)
-    {
-        return nread < 0 ? KvError::IoFail : KvError::EndOfFile;
-    }
+    KvError err = log->Read(log_buf_.data(), ManifestBuilder::header_bytes);
+    CHECK_KV_ERR(err);
 
     root_ = DecodeFixed32(log_buf_.data() + ManifestBuilder::offset_root);
 
     const uint32_t len =
         DecodeFixed32(log_buf_.data() + ManifestBuilder::offset_len);
     log_buf_.resize(ManifestBuilder::header_bytes + len);
-    nread = log->Read(log_buf_.data() + ManifestBuilder::header_bytes, len);
-    if (nread < len)
-    {
-        return nread < 0 ? KvError::IoFail : KvError::EndOfFile;
-    }
+    err = log->Read(log_buf_.data() + ManifestBuilder::header_bytes, len);
+    CHECK_KV_ERR(err);
     mapping_ = {log_buf_.data() + ManifestBuilder::header_bytes,
                 log_buf_.size() - ManifestBuilder::header_bytes};
 

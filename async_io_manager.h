@@ -30,7 +30,7 @@ class ManifestFile
 {
 public:
     virtual ~ManifestFile() = default;
-    virtual int Read(char *dst, size_t n) = 0;
+    virtual KvError Read(char *dst, size_t n) = 0;
 };
 
 using ManifestFilePtr = std::unique_ptr<ManifestFile>;
@@ -220,7 +220,7 @@ private:
     public:
         Manifest(IouringMgr *io_mgr, LruFD::Ref &&fd)
             : io_mgr_(io_mgr), fd_(std::move(fd)) {};
-        int Read(char *dst, size_t n) override;
+        KvError Read(char *dst, size_t n) override;
 
     private:
         IouringMgr *io_mgr_;
@@ -333,7 +333,7 @@ public:
     {
     public:
         Manifest(std::string_view content) : content_(content) {};
-        int Read(char *dst, size_t n) override;
+        KvError Read(char *dst, size_t n) override;
         void Skip(size_t n);
 
     private:

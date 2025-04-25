@@ -7,7 +7,6 @@
 #include <liburing/io_uring.h>
 #include <linux/openat2.h>
 
-#include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cstddef>
@@ -1084,15 +1083,30 @@ IouringMgr::WriteReq *IouringMgr::AllocWriteReq(LruFD::Ref fd, VarPage page)
     return req;
 }
 
-int IouringMgr::Manifest::Read(char *dst, size_t n)
+KvError IouringMgr::Manifest::Read(char *dst, size_t n)
 {
-    int res = io_mgr_->Read(fd_.FdPair(), dst, n, offset_);
-    if (res < 0)
+    // TODO(zhanghao): Use provided buffer to read 4KB at a time.
+    while (n > 0)
     {
-        return res;
+        int res = io_mgr_->Read(fd_.FdPair(), dst, n, offset_);
+        assert(res <= n);
+        if (res < 0)
+        {
+            if (res == -EAGAIN)
+            {
+                continue;
+            }
+            return ToKvError(res);
+        }
+        if (res == 0)
+        {
+            return KvError::EndOfFile;
+        }
+        dst += res;
+        offset_ += res;
+        n -= res;
     }
-    offset_ += res;
-    return res;
+    return KvError::NoError;
 }
 
 IouringMgr::LruFD::LruFD(PartitionFiles *tbl, uint32_t file_id)
@@ -1418,12 +1432,15 @@ KvError MemStoreMgr::SwitchManifest(const TableIdent &tbl_id,
     return KvError::NoError;
 }
 
-int MemStoreMgr::Manifest::Read(char *dst, size_t n)
+KvError MemStoreMgr::Manifest::Read(char *dst, size_t n)
 {
-    size_t n0 = std::min(content_.length(), n);
-    memcpy(dst, content_.data(), n0);
-    content_ = content_.substr(n0);
-    return n0;
+    if (content_.length() < n)
+    {
+        return KvError::EndOfFile;
+    }
+    memcpy(dst, content_.data(), n);
+    content_ = content_.substr(n);
+    return KvError::NoError;
 }
 
 void MemStoreMgr::Manifest::Skip(size_t n)

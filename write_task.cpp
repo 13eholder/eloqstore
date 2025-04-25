@@ -1319,8 +1319,7 @@ std::pair<MemIndexPage *, KvError> TruncateTask::TruncateIndexPage(
         // delete whole sub-node
         if (is_leaf_idx)
         {
-            DeleteDataPage(sub_node_id);
-            return KvError::NoError;
+            return DeleteDataPage(sub_node_id);
         }
         else
         {
