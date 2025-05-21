@@ -10,8 +10,6 @@
 
 namespace kvstore
 {
-namespace fs = std::filesystem;
-
 FileGarbageCollector::~FileGarbageCollector()
 {
     Stop();
@@ -46,14 +44,12 @@ void FileGarbageCollector::Stop()
     LOG(INFO) << "file garbage collector stopped";
 }
 
-bool FileGarbageCollector::AddTask(fs::path partition_path,
-                                   std::shared_ptr<MappingSnapshot> mapping,
+bool FileGarbageCollector::AddTask(std::shared_ptr<MappingSnapshot> mapping,
                                    uint64_t ts,
                                    FileId max_file_id)
 {
-    assert(!partition_path.empty());
-    GcTask new_task(
-        std::move(partition_path), std::move(mapping), ts, max_file_id);
+    assert(mapping != nullptr);
+    GcTask new_task(std::move(mapping), ts, max_file_id);
     return tasks_.enqueue(std::move(new_task));
 }
 
@@ -80,14 +76,16 @@ void FileGarbageCollector::GCRoutine()
         {
             break;
         }
-        LOG(INFO) << "File GC started: " << req.partition_path_;
+        const TableIdent *tbl_id = req.mapping_->tbl_ident_;
+        fs::path partition_path = tbl_id->StorePath(options_->store_path);
+        DLOG(INFO) << "File GC started: " << partition_path;
         KvError err = Execute(options_,
-                              req.partition_path_,
+                              partition_path,
                               req.mapping_.get(),
                               req.mapping_ts_,
                               req.max_file_id_);
-        LOG(INFO) << "File GC finished: " << req.partition_path_ << " : "
-                  << ErrorString(err);
+        DLOG(INFO) << "File GC finished: " << partition_path << " : "
+                   << ErrorString(err);
     }
 }
 
@@ -214,19 +212,15 @@ KvError FileGarbageCollector::Execute(const KvOptions *opts,
     return KvError::NoError;
 }
 
-FileGarbageCollector::GcTask::GcTask(std::filesystem::path path,
-                                     std::shared_ptr<MappingSnapshot> mapping,
+FileGarbageCollector::GcTask::GcTask(std::shared_ptr<MappingSnapshot> mapping,
                                      uint64_t ts,
                                      FileId max_file_id)
-    : partition_path_(std::move(path)),
-      mapping_(std::move(mapping)),
-      mapping_ts_(ts),
-      max_file_id_(max_file_id)
+    : mapping_(std::move(mapping)), mapping_ts_(ts), max_file_id_(max_file_id)
 {
 }
 
 bool FileGarbageCollector::GcTask::IsStopSignal() const
 {
-    return partition_path_.empty();
+    return mapping_ == nullptr;
 }
 }  // namespace kvstore

@@ -19,9 +19,9 @@ Shard::~Shard()
     }
 }
 
-KvError Shard::Init(int dir_fd)
+KvError Shard::Init(std::span<int> root_fds)
 {
-    return io_mgr_->Init(dir_fd);
+    return io_mgr_->Init(root_fds);
 }
 
 void Shard::Loop()

@@ -474,13 +474,10 @@ KvError WriteTask::TriggerFileGC() const
     CHECK_KV_ERR(err);
 
     const PageMapper *mapper = meta->mapper_.get();
-    std::filesystem::path partition_path = Options()->db_path;
-    partition_path.append(tbl_ident_.ToString());
     auto mapping = mapper->GetMappingSnapshot();
-    uint64_t ts = utils::UnixTs<std::chrono::nanoseconds>();
+    uint64_t ts = utils::UnixTs<chrono::microseconds>();
     FileId cur_file_id = mapper->FilePgAllocator()->CurrentFileId();
-    file_garbage_collector->AddTask(
-        std::move(partition_path), std::move(mapping), ts, cur_file_id);
+    file_garbage_collector->AddTask(std::move(mapping), ts, cur_file_id);
     return KvError::NoError;
 }
 

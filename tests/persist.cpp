@@ -66,8 +66,8 @@ TEST_CASE("persist with restart", "[persist]")
 TEST_CASE("simple LRU for opened fd", "[persist]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .fd_limit = 12,
+        .store_path = {test_path},
         .data_page_size = static_cast<uint16_t>(kvstore::page_align),
         .pages_per_file_shift = 1,
     };
@@ -82,8 +82,8 @@ TEST_CASE("simple LRU for opened fd", "[persist]")
 TEST_CASE("complex LRU for opened fd", "[persist]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .fd_limit = 12,
+        .store_path = {test_path},
         .data_page_size = static_cast<uint16_t>(kvstore::page_align),
         .pages_per_file_shift = 1,
     };
@@ -204,7 +204,7 @@ TEST_CASE("random overflow kv", "[persist][overflow_kv]")
 TEST_CASE("easy append only mode", "[persist][append]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
+        .store_path = {test_path},
         .data_append_mode = true,
     };
     kvstore::EloqStore *store = InitStore(options);
@@ -220,8 +220,8 @@ TEST_CASE("easy append only mode", "[persist][append]")
 TEST_CASE("hard append only mode", "[persist][append]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .file_amplify_factor = 2,
+        .store_path = {test_path},
         .pages_per_file_shift = 8,
         .data_append_mode = true,
     };
@@ -255,9 +255,9 @@ size_t GetDirEntriesCount(const fs::path &dir_path)
 TEST_CASE("file garbage collector", "[GC]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .num_retained_archives = 0,
         .file_amplify_factor = 2,
+        .store_path = {test_path},
         .pages_per_file_shift = 8,
         .data_append_mode = true,
     };
@@ -284,9 +284,9 @@ TEST_CASE("file garbage collector", "[GC]")
 TEST_CASE("append mode with restart", "[persist]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .num_retained_archives = 0,
         .file_amplify_factor = 2,
+        .store_path = {test_path},
         .pages_per_file_shift = 8,
         .data_append_mode = true,
     };

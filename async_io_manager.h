@@ -54,7 +54,7 @@ public:
     static std::unique_ptr<AsyncIoManager> New(const KvOptions *opts);
 
     /** These methods are provided for worker thread. */
-    virtual KvError Init(int dir_fd) = 0;
+    virtual KvError Init(std::span<int> root_fds) = 0;
     virtual void Submit() = 0;
     virtual void PollComplete() = 0;
 
@@ -90,12 +90,14 @@ public:
     const KvOptions *options_;
 };
 
+KvError ToKvError(int err_no);
+
 class IouringMgr : public AsyncIoManager
 {
 public:
     IouringMgr(const KvOptions *opts);
     ~IouringMgr() override;
-    KvError Init(int dir_fd) override;
+    KvError Init(std::span<int> root_fds) override;
     void Submit() override;
     void PollComplete() override;
 
@@ -246,7 +248,6 @@ private:
         // char *buff_; // options_->data_page_size
     };
 
-    static KvError ToKvError(int err_no);
     static std::pair<void *, UserDataType> DecodeUserData(uint64_t user_data);
     static void EncodeUserData(io_uring_sqe *sqe,
                                const void *ptr,
@@ -284,6 +285,7 @@ private:
                             std::string_view content,
                             LruFD::Ref result);
 
+    FdIdx GetRootFD(const TableIdent &tbl_id) const;
     /**
      * @brief Get file descripter if it is already opened.
      */
@@ -306,7 +308,7 @@ private:
     WriteReq free_write_reqs_;
     WaitingZone waiting_write_;
 
-    FdIdx dir_fd_idx_{-1, false};
+    std::span<int> root_fds_;
     std::unordered_map<TableIdent, PartitionFiles> tables_;
     LruFD lru_fd_head_{nullptr, MaxFileId};
     LruFD lru_fd_tail_{nullptr, MaxFileId};
@@ -321,14 +323,14 @@ private:
 
     io_uring ring_;
     WaitingZone waiting_sqe_;
-    uint32_t not_submitted_sqe_{0};
+    uint32_t prepared_sqe_{0};
 };
 
 class MemStoreMgr : public AsyncIoManager
 {
 public:
     MemStoreMgr(const KvOptions *opts);
-    KvError Init(int dir_fd) override;
+    KvError Init(std::span<int> root_fds) override;
     void Submit() override {};
     void PollComplete() override {};
 

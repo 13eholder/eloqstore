@@ -67,10 +67,10 @@ TEST_CASE("detect manifest corruption", "[manifest]")
 TEST_CASE("create archives", "[archive][slow]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
         .num_retained_archives = 1,
         .archive_interval_secs = 1,
         .file_amplify_factor = 2,
+        .store_path = {test_path},
         .pages_per_file_shift = 8,
         .data_append_mode = true,
     };

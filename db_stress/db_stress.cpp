@@ -44,7 +44,7 @@ int main(int argc, char **argv)
     FLAGS_stderrthreshold = google::GLOG_WARNING;
 
     kvstore::KvOptions opts;
-    opts.db_path = FLAGS_db_path;
+    opts.db_path = {FLAGS_db_path};
     opts.buf_ring_size = FLAGS_buf_ring_size;
     opts.coroutine_stack_size = FLAGS_coroutine_stack_size;
     opts.data_page_size = FLAGS_data_page_size;

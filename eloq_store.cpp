@@ -15,8 +15,6 @@
 #include "file_gc.h"
 #include "shard.h"
 
-namespace fs = std::filesystem;
-
 namespace kvstore
 {
 
@@ -51,7 +49,7 @@ EloqStore::~EloqStore()
 
 KvError EloqStore::Start()
 {
-    if (!options_.db_path.empty())
+    if (!options_.store_path.empty())
     {
         KvError err = InitDBDir();
         CHECK_KV_ERR(err);
@@ -64,7 +62,7 @@ KvError EloqStore::Start()
         {
             shards_[i] = std::make_unique<Shard>(this);
         }
-        KvError err = shards_[i]->Init(dir_fd_);
+        KvError err = shards_[i]->Init(root_fds_);
         CHECK_KV_ERR(err);
     }
 
@@ -103,44 +101,51 @@ KvError EloqStore::Start()
 
 KvError EloqStore::InitDBDir()
 {
-    const fs::path &db_path = options_.db_path;
-    if (fs::exists(db_path))
+    for (const fs::path &store_path : options_.store_path)
     {
-        if (!fs::is_directory(db_path))
+        if (fs::exists(store_path))
         {
-            LOG(ERROR) << "path " << db_path << " is not directory";
-            return KvError::InvalidArgs;
-        }
-        for (auto &ent : fs::directory_iterator{db_path})
-        {
-            if (!ent.is_directory())
+            if (!fs::is_directory(store_path))
             {
-                LOG(ERROR) << ent.path() << " is not directory";
+                LOG(ERROR) << "path " << store_path << " is not directory";
                 return KvError::InvalidArgs;
             }
-            const std::string name = ent.path().filename().string();
-            TableIdent tbl_id = TableIdent::FromString(name);
-            if (tbl_id.tbl_name_.empty())
+            for (auto &ent : fs::directory_iterator{store_path})
             {
-                LOG(ERROR) << "unexpected partition name " << name;
-                return KvError::InvalidArgs;
-            }
-            fs::path wal_path = ent.path() / FileNameManifest;
-            if (!fs::exists(wal_path))
-            {
-                LOG(WARNING) << "clear incomplete partition " << name;
-                fs::remove_all(ent.path());
+                if (!ent.is_directory())
+                {
+                    LOG(ERROR) << ent.path() << " is not directory";
+                    return KvError::InvalidArgs;
+                }
+                fs::path wal_path = ent.path() / FileNameManifest;
+                if (!fs::exists(wal_path))
+                {
+                    LOG(WARNING) << "clear incomplete partition " << ent.path();
+                    fs::remove_all(ent.path());
+                }
             }
         }
+        else
+        {
+            fs::create_directories(store_path);
+        }
     }
-    else
+
+    assert(root_fds_.empty());
+    for (const fs::path &store_path : options_.store_path)
     {
-        fs::create_directories(db_path);
-    }
-    dir_fd_ = open(db_path.c_str(), IouringMgr::oflags_dir);
-    if (dir_fd_ < 0)
-    {
-        return KvError::IoFail;
+        int res = open(store_path.c_str(), IouringMgr::oflags_dir);
+        if (res < 0)
+        {
+            for (int fd : root_fds_)
+            {
+                int r = close(fd);
+                assert(r == 0);
+            }
+            root_fds_.clear();
+            return ToKvError(res);
+        }
+        root_fds_.push_back(res);
     }
     return KvError::NoError;
 }
@@ -200,11 +205,12 @@ void EloqStore::Stop()
         file_gc_->Stop();
     }
 
-    if (dir_fd_ >= 0)
+    for (int fd : root_fds_)
     {
-        close(dir_fd_);
-        dir_fd_ = -1;
+        int res = close(fd);
+        assert(res == 0);
     }
+    root_fds_.clear();
     LOG(INFO) << "EloqStore is stopped.";
 }
 

@@ -24,15 +24,15 @@ kvstore::EloqStore *InitStore(const kvstore::KvOptions &opts)
         // Required options not equal to the options of the existing store, so
         // we need to stop and remove it.
         eloqstore->Stop();
-        if (!eloqstore->Options().db_path.empty())
+        for (const std::string &db_path : eloqstore->Options().store_path)
         {
-            std::filesystem::remove_all(eloqstore->Options().db_path);
+            std::filesystem::remove_all(db_path);
         }
     }
 
-    if (!opts.db_path.empty() && std::filesystem::exists(opts.db_path))
+    for (const std::string &db_path : opts.store_path)
     {
-        std::filesystem::remove_all(opts.db_path);
+        std::filesystem::remove_all(db_path);
     }
 
     eloqstore = std::make_unique<kvstore::EloqStore>(opts);

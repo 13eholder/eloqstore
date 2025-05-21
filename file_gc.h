@@ -23,8 +23,7 @@ public:
     ~FileGarbageCollector();
     void Start(uint16_t n_workers);
     void Stop();
-    bool AddTask(std::filesystem::path partition_path,
-                 std::shared_ptr<MappingSnapshot> mapping,
+    bool AddTask(std::shared_ptr<MappingSnapshot> mapping,
                  uint64_t ts,
                  FileId max_file_id);
 
@@ -40,12 +39,10 @@ private:
     struct GcTask
     {
         GcTask() = default;
-        GcTask(std::filesystem::path path,
-               std::shared_ptr<MappingSnapshot> mapping,
+        GcTask(std::shared_ptr<MappingSnapshot> mapping,
                uint64_t ts,
                FileId max_file_id);
         bool IsStopSignal() const;
-        std::filesystem::path partition_path_;
         std::shared_ptr<MappingSnapshot> mapping_{nullptr};
         uint64_t mapping_ts_{0};
         FileId max_file_id_{0};

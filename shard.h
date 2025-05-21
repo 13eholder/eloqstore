@@ -16,7 +16,7 @@ class Shard
 public:
     Shard(const EloqStore *store);
     ~Shard();
-    KvError Init(int dir_fd);
+    KvError Init(std::span<int> root_fds);
     void Start();
     void Stop();
     bool AddKvRequest(KvRequest *req);

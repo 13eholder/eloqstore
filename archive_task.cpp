@@ -21,7 +21,7 @@ KvError ArchiveTask::CreateArchive()
     FilePageId max_fp_id = meta->mapper_->FilePgAllocator()->MaxFilePageId();
     std::string_view snapshot = wal_builder_.Snapshot(root, mapping, max_fp_id);
 
-    uint64_t current_ts = utils::UnixTs<std::chrono::nanoseconds>();
+    uint64_t current_ts = utils::UnixTs<chrono::microseconds>();
     err = IoMgr()->CreateArchive(tbl_ident_, snapshot, current_ts);
     CHECK_KV_ERR(err);
     LOG(INFO) << "created archive for partition " << tbl_ident_ << " at "

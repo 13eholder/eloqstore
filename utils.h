@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cstdint>
 
+namespace chrono = std::chrono;
+
 namespace utils
 {
 template <typename T>
@@ -16,7 +18,7 @@ inline T UnsetLowBits(T num, uint8_t n)
 template <typename T>
 uint64_t UnixTs()
 {
-    auto dur = std::chrono::system_clock::now().time_since_epoch();
-    return std::chrono::duration_cast<T>(dur).count();
+    auto dur = chrono::steady_clock::now().time_since_epoch();
+    return chrono::duration_cast<T>(dur).count();
 }
 }  // namespace utils

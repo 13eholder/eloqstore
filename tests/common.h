@@ -12,7 +12,7 @@ constexpr char test_path[] = "/tmp/eloqstore";
 static constexpr kvstore::TableIdent test_tbl_id = {"t0", 0};
 const kvstore::KvOptions mem_store_opts = {};
 const kvstore::KvOptions default_opts = {
-    .db_path = test_path,
+    .store_path = {test_path},
 };
 
 kvstore::EloqStore *InitStore(const kvstore::KvOptions &opts);

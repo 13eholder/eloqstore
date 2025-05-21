@@ -67,9 +67,12 @@ TEST_CASE("easy concurrency test", "[persist][concurrency]")
 
 TEST_CASE("hard concurrency test", "[persist][concurrency]")
 {
+    std::string root_path(test_path);
     kvstore::KvOptions options = {
-        .db_path = test_path,
         .num_threads = 4,
+        .store_path = {root_path + "/disk0",
+                       root_path + "/disk1",
+                       root_path + "/disk2"},
     };
     kvstore::EloqStore *store = InitStore(options);
     ConcurrencyTester tester(store, "t1", 10, 1000);
@@ -81,7 +84,7 @@ TEST_CASE("hard concurrency test", "[persist][concurrency]")
 TEST_CASE("stress append only mode", "[persist][append]")
 {
     kvstore::KvOptions options{
-        .db_path = test_path,
+        .store_path = {test_path},
         .data_append_mode = true,
     };
     kvstore::EloqStore *store = InitStore(options);

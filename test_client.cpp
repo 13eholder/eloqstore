@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     }
 
     kvstore::KvOptions options;
-    options.db_path = FLAGS_db_path;
+    options.store_path = {FLAGS_db_path};
     kvstore::EloqStore store(options);
     kvstore::KvError err = store.Start();
     if (err != kvstore::KvError::NoError)

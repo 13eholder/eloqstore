@@ -7,8 +7,6 @@
 #include "eloq_store.h"
 #include "utils.h"
 
-namespace fs = std::filesystem;
-
 namespace kvstore
 {
 
@@ -46,14 +44,14 @@ bool ArchiveCrond::IsStopped()
 void ArchiveCrond::Crond()
 {
     const uint64_t interval_secs = store_->Options().archive_interval_secs;
-    last_archive_ts_ = utils::UnixTs<std::chrono::seconds>();
+    last_archive_ts_ = utils::UnixTs<chrono::seconds>();
     while (!IsStopped())
     {
         // Loop required to prevent spurious wakeups
-        auto elapsed = utils::UnixTs<std::chrono::seconds>() - last_archive_ts_;
+        auto elapsed = utils::UnixTs<chrono::seconds>() - last_archive_ts_;
         while (elapsed < interval_secs)
         {
-            auto wait_period = std::chrono::seconds(interval_secs - elapsed);
+            auto wait_period = chrono::seconds(interval_secs - elapsed);
             std::unique_lock lk(mu_);
             cond_var_.wait_for(lk, wait_period, [this] { return stopped_; });
             if (stopped_)
@@ -61,11 +59,11 @@ void ArchiveCrond::Crond()
                 // Stopped during wait.
                 return;
             }
-            elapsed = utils::UnixTs<std::chrono::seconds>() - last_archive_ts_;
+            elapsed = utils::UnixTs<chrono::seconds>() - last_archive_ts_;
         }
 
         StartArchiving();
-        last_archive_ts_ = utils::UnixTs<std::chrono::seconds>();
+        last_archive_ts_ = utils::UnixTs<chrono::seconds>();
     }
 }
 
@@ -100,25 +98,29 @@ void ArchiveCrond::StartArchiving()
         }
     };
 
-    for (auto &ent : fs::directory_iterator{store_->Options().db_path})
+    for (const fs::path &db_path : store_->Options().store_path)
     {
-        if (!ent.is_directory())
+        for (auto &ent : fs::directory_iterator{db_path})
         {
-            continue;
-        }
-        TableIdent tbl_id = TableIdent::FromString(ent.path().filename());
-        if (tbl_id.tbl_name_.empty())
-        {
-            LOG(WARNING) << "unexpected partition " << ent.path();
-            continue;
-        }
-        table_ids.emplace_back(std::move(tbl_id));
+            if (!ent.is_directory())
+            {
+                continue;
+            }
 
-        assert(table_ids.size() <= archive_batch);
-        if (table_ids.size() == archive_batch)
-        {
-            do_archiving(table_ids);
-            table_ids.clear();
+            TableIdent tbl_id = TableIdent::FromString(ent.path().filename());
+            if (tbl_id.tbl_name_.empty())
+            {
+                LOG(WARNING) << "unexpected partition " << ent.path();
+                continue;
+            }
+            table_ids.emplace_back(std::move(tbl_id));
+
+            assert(table_ids.size() <= archive_batch);
+            if (table_ids.size() == archive_batch)
+            {
+                do_archiving(table_ids);
+                table_ids.clear();
+            }
         }
     }
     if (!table_ids.empty())

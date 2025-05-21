@@ -196,7 +196,7 @@ private:
     KvError InitDBDir();
 
     KvOptions options_;
-    int dir_fd_{-1};
+    std::vector<int> root_fds_;
     std::vector<std::unique_ptr<Shard>> shards_;
     std::atomic<bool> stopped_{true};
 

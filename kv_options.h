@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "comparator.h"
 
@@ -16,13 +17,8 @@ constexpr uint16_t max_key_size = 2048;
 
 struct KvOptions
 {
-    bool operator==(const KvOptions &other) const;
+    bool operator==(const KvOptions &other) const = default;
 
-    /**
-     * @brief Key-Value database storage path.
-     * In-memory storage will be used if path is empty.
-     */
-    std::string db_path;
     /**
      * @brief Amount of threads.
      */
@@ -103,6 +99,14 @@ struct KvOptions
      */
 
     /**
+     * @brief EloqStore storage path list.
+     * This can be multiple storage paths corresponding to multiple disks, and
+     * partitions will be evenly distributed on each disk. In-memory storage
+     * will be used if this is empty.
+     */
+    std::vector<std::string> store_path;
+
+    /**
      * @brief Size of B+Tree index/data node (page).
      * Ensure that it is aligned to the system's page size.
      */
@@ -124,11 +128,6 @@ struct KvOptions
      */
     bool data_append_mode = false;
 };
-
-inline bool KvOptions::operator==(const KvOptions &other) const
-{
-    return std::memcmp(this, &other, sizeof(KvOptions)) == 0;
-}
 
 inline size_t KvOptions::FilePageOffsetMask() const
 {

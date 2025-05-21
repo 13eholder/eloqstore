@@ -56,7 +56,7 @@ char *VarPagePtr(const VarPage &page)
 
 std::unique_ptr<AsyncIoManager> AsyncIoManager::New(const KvOptions *opts)
 {
-    if (opts->db_path.empty())
+    if (opts->store_path.empty())
     {
         return std::make_unique<MemStoreMgr>(opts);
     }
@@ -88,7 +88,7 @@ IouringMgr::~IouringMgr()
     io_uring_queue_exit(&ring_);
 }
 
-KvError IouringMgr::Init(int dir_fd)
+KvError IouringMgr::Init(std::span<int> root_fds)
 {
     io_uring_params params = {};
     int ret =
@@ -127,7 +127,7 @@ KvError IouringMgr::Init(int dir_fd)
     }
     io_uring_buf_ring_advance(buf_ring_, num_bufs);
 
-    dir_fd_idx_ = {dir_fd, false};
+    root_fds_ = root_fds;
     return KvError::NoError;
 }
 
@@ -392,23 +392,11 @@ KvError IouringMgr::AbortWrite(const TableIdent &tbl_id)
 
 void IouringMgr::CleanTable(const TableIdent &tbl_id)
 {
-    auto it = tables_.find(tbl_id);
-    assert(it != tables_.end());
-    PartitionFiles &tp = it->second;
-    io_uring_sqe *sqe;
-    // TODO(zhanghao): remove all directory entries
-    sqe = GetSQE(UserDataType::KvTask, thd_task);
-    std::string path = tbl_id.ToString();
-    io_uring_prep_unlinkat(sqe, dir_fd_idx_.first, path.c_str(), AT_REMOVEDIR);
-    if (dir_fd_idx_.second)
-    {
-        sqe->flags |= IOSQE_FIXED_FILE;
-    }
-    thd_task->WaitAsynIo();
-    tables_.erase(it);
+    // TODO: io_uring_prep_unlinkat
+    assert(false);
 }
 
-KvError IouringMgr::ToKvError(int err_no)
+KvError ToKvError(int err_no)
 {
     if (err_no >= 0)
     {
@@ -448,6 +436,13 @@ void IouringMgr::EncodeUserData(io_uring_sqe *sqe,
 {
     void *user_data = (void *) ((uint64_t(ptr) << 8) | uint64_t(type));
     io_uring_sqe_set_data(sqe, user_data);
+}
+
+IouringMgr::FdIdx IouringMgr::GetRootFD(const TableIdent &tbl_id) const
+{
+    assert(!root_fds_.empty());
+    int root_fd = root_fds_[tbl_id.DiskIndex(root_fds_.size())];
+    return {root_fd, false};
 }
 
 IouringMgr::LruFD::Ref IouringMgr::GetOpenedFD(const TableIdent &tbl_id,
@@ -541,6 +536,7 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
         {
         case LruFD::FdEmpty:
         {
+            FdIdx root_fd = GetRootFD(tbl_id);
             lru_fd.Get()->fd_ = LruFD::FdLocked;
 
             int fd;
@@ -548,10 +544,10 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
             if (file_id == LruFD::kDirectory)
             {
                 std::string dirname = tbl_id.ToString();
-                fd = OpenAt(dir_fd_idx_, dirname.c_str(), oflags_dir);
+                fd = OpenAt(root_fd, dirname.c_str(), oflags_dir);
                 if (fd == -ENOENT && create)
                 {
-                    fd = CreateDir(dir_fd_idx_, dirname.c_str());
+                    fd = CreateDir(root_fd, dirname.c_str());
                 }
             }
             else if (file_id == LruFD::kManifest || file_id == LruFD::kTmpFile)
@@ -561,7 +557,7 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
                                            : FileNameTmpfile;
                 fs::path path = tbl_id.ToString();
                 path.append(filename);
-                fd = OpenAt(dir_fd_idx_, path.c_str(), O_RDWR);
+                fd = OpenAt(root_fd, path.c_str(), O_RDWR);
                 if (fd == -ENOENT && create)
                 {
                     auto [dfd_ref, err] =
@@ -585,7 +581,7 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
                 std::string filename = DataFileName(file_id);
                 fs::path path = tbl_id.ToString();
                 path.append(filename);
-                fd = OpenAt(dir_fd_idx_, path.c_str(), O_RDWR | O_DIRECT);
+                fd = OpenAt(root_fd, path.c_str(), O_RDWR | O_DIRECT);
                 if (fd == -ENOENT && create)
                 {
                     auto [dfd_ref, err] =
@@ -693,7 +689,7 @@ std::pair<FileId, uint32_t> IouringMgr::ConvFilePageId(
 
 void IouringMgr::Submit()
 {
-    if (not_submitted_sqe_ == 0)
+    if (prepared_sqe_ == 0)
     {
         return;
     }
@@ -704,9 +700,9 @@ void IouringMgr::Submit()
     {
         LOG(ERROR) << "iouring submit failed " << ret;
     }
-    else if (ret > 0)
+    else
     {
-        not_submitted_sqe_ -= ret;
+        prepared_sqe_ -= ret;
     }
 }
 
@@ -1175,7 +1171,7 @@ io_uring_sqe *IouringMgr::GetSQE(UserDataType type, const void *user_ptr)
         EncodeUserData(sqe, user_ptr, type);
     }
     thd_task->inflight_io_++;
-    not_submitted_sqe_++;
+    prepared_sqe_++;
     return sqe;
 }
 
@@ -1459,7 +1455,7 @@ MemStoreMgr::MemStoreMgr(const KvOptions *opts) : AsyncIoManager(opts)
 {
 }
 
-KvError MemStoreMgr::Init(int dir_fd)
+KvError MemStoreMgr::Init(std::span<int> root_fds)
 {
     return KvError::NoError;
 }

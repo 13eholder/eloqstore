@@ -1,12 +1,13 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <ostream>
+#include <span>
 #include <string>
-
-#include "coding.h"
 
 namespace kvstore
 {
@@ -24,6 +25,8 @@ static constexpr char FileNameData[] = "data";
 static constexpr char FileNameManifest[] = "manifest";
 static constexpr char FileNameTmpfile[] = "tmpfile";
 
+namespace fs = std::filesystem;
+
 struct TableIdent
 {
     static constexpr char separator = '#';
@@ -36,7 +39,8 @@ struct TableIdent
 
     std::string ToString() const;
     static TableIdent FromString(const std::string &str);
-    void SerializeTo(std::string &dst) const;
+    uint8_t DiskIndex(uint8_t num_disks) const;
+    fs::path StorePath(std::span<const std::string> disks) const;
     size_t Hash() const;
     bool IsValid() const;
 
@@ -68,10 +72,17 @@ inline TableIdent TableIdent::FromString(const std::string &str)
     }
 }
 
-inline void TableIdent::SerializeTo(std::string &dst) const
+inline uint8_t TableIdent::DiskIndex(uint8_t num_disks) const
 {
-    PutLengthPrefixedSlice(&dst, tbl_name_);
-    PutVarint32(&dst, partition_id_);
+    assert(num_disks > 0);
+    return partition_id_ % num_disks;
+}
+
+inline fs::path TableIdent::StorePath(std::span<const std::string> disks) const
+{
+    fs::path partition_path = disks[DiskIndex(disks.size())];
+    partition_path.append(ToString());
+    return partition_path;
 }
 
 inline size_t TableIdent::Hash() const
