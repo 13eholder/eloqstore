@@ -756,22 +756,6 @@ void ConcurrencyTester::Run(uint16_t n_readers,
                             uint32_t write_pause)
 {
     uint16_t running_readers = 0;
-    auto is_finished = [this, &running_readers]() -> bool
-    {
-        if (running_readers > 0)
-        {
-            return false;
-        }
-        for (const Partition &partition : partitions_)
-        {
-            if (partition.IsWriting())
-            {
-                return false;
-            }
-        }
-        return true;
-    };
-
     // Start readers
     CHECK(n_readers * ops >= partitions_.size());
     std::vector<Reader> readers(n_readers);
@@ -782,7 +766,7 @@ void ConcurrencyTester::Run(uint16_t n_readers,
         ExecRead(&reader);
     }
 
-    while (!is_finished())
+    while (running_readers > 0)
     {
         uint64_t user_data;
         finished_reqs_.wait_dequeue(user_data);

@@ -13,9 +13,11 @@
 #include <vector>
 
 #include "archive_crond.h"
+#include "common.h"
 #include "file_gc.h"
 #include "object_store.h"
 #include "shard.h"
+#include "utils.h"
 
 namespace kvstore
 {
@@ -78,12 +80,23 @@ KvError EloqStore::Start()
     {
         obj_store_ = std::make_unique<ObjectStore>(&options_);
     }
+
+    // There are files opened at very early stage like stdin/stdout/stderr, glog
+    // file, and root directories of data.
+    uint32_t shard_fd_limit = 0;
+    size_t used_fd = utils::CountUsedFD();
+    if (used_fd + num_reserved_fd < options_.fd_limit)
+    {
+        shard_fd_limit = (options_.fd_limit - used_fd - num_reserved_fd) /
+                         options_.num_threads;
+    }
+
     shards_.resize(options_.num_threads);
     for (size_t i = 0; i < options_.num_threads; i++)
     {
         if (shards_[i] == nullptr)
         {
-            shards_[i] = std::make_unique<Shard>(this);
+            shards_[i] = std::make_unique<Shard>(this, shard_fd_limit);
         }
         KvError err = shards_[i]->Init();
         CHECK_KV_ERR(err);
@@ -136,12 +149,12 @@ KvError EloqStore::InitStoreSpace()
         LOG(ERROR) << "failed to read open file limit: " << strerror(errno);
         return ToKvError(res);
     }
-    uint32_t opt_limit = options_.fd_limit * options_.num_threads;
-    if (fd_limit.rlim_cur < opt_limit)
+    DLOG(INFO) << "rlimit open file " << fd_limit.rlim_cur << ", hard limit "
+               << fd_limit.rlim_max;
+    if (fd_limit.rlim_cur < options_.fd_limit)
     {
-        LOG(INFO) << "increase open file limit from " << fd_limit.rlim_cur
-                  << "(hard=" << fd_limit.rlim_max << ") to " << opt_limit;
-        fd_limit.rlim_cur = opt_limit;
+        LOG(INFO) << "increase open file limit to " << options_.fd_limit;
+        fd_limit.rlim_cur = options_.fd_limit;
         if (setrlimit(RLIMIT_NOFILE, &fd_limit) != 0)
         {
             LOG(ERROR) << "failed to increase open file limit: "

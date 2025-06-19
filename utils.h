@@ -3,6 +3,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 
 namespace chrono = std::chrono;
 
@@ -21,4 +22,16 @@ uint64_t UnixTs()
     auto dur = chrono::steady_clock::now().time_since_epoch();
     return chrono::duration_cast<T>(dur).count();
 }
+
+static size_t DirEntryCount(std::filesystem::path path)
+{
+    return std::distance(std::filesystem::directory_iterator(path),
+                         std::filesystem::directory_iterator{});
+}
+
+static size_t CountUsedFD()
+{
+    return DirEntryCount("/proc/self/fd");
+}
+
 }  // namespace utils

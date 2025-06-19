@@ -158,7 +158,8 @@ KvError TruncateTask::Truncate(std::string_view trunc_pos)
 
     if (trunc_pos.empty())
     {
-        DeleteTree(cow_meta_.root_->GetPageId());
+        err = DeleteTree(cow_meta_.root_->GetPageId());
+        CHECK_KV_ERR(err);
         return UpdateMeta(nullptr);
     }
 

@@ -15,6 +15,7 @@
 #include "kv_options.h"
 #include "test_utils.h"
 #include "types.h"
+#include "utils.h"
 
 using namespace test_util;
 
@@ -66,7 +67,7 @@ TEST_CASE("persist with restart", "[persist]")
 TEST_CASE("simple LRU for opened fd", "[persist]")
 {
     kvstore::KvOptions options{
-        .fd_limit = 12,
+        .fd_limit = 20 + kvstore::num_reserved_fd,
         .store_path = {test_path},
         .data_page_size = static_cast<uint16_t>(kvstore::page_align),
         .pages_per_file_shift = 1,
@@ -82,7 +83,7 @@ TEST_CASE("simple LRU for opened fd", "[persist]")
 TEST_CASE("complex LRU for opened fd", "[persist]")
 {
     kvstore::KvOptions options{
-        .fd_limit = 12,
+        .fd_limit = 20 + kvstore::num_reserved_fd,
         .store_path = {test_path},
         .data_page_size = static_cast<uint16_t>(kvstore::page_align),
         .pages_per_file_shift = 1,
@@ -237,21 +238,6 @@ TEST_CASE("hard append only mode", "[persist][append]")
     verify.Validate();
 }
 
-size_t GetDirEntriesCount(const fs::path &dir_path)
-{
-    if (!fs::exists(dir_path) || !fs::is_directory(dir_path))
-    {
-        LOG(FATAL) << "Invalid directory";
-    }
-
-    size_t count = 0;
-    for (const auto &entry : fs::directory_iterator(dir_path))
-    {
-        count++;
-    }
-    return count;
-};
-
 TEST_CASE("file garbage collector", "[GC]")
 {
     kvstore::KvOptions options{
@@ -269,14 +255,14 @@ TEST_CASE("file garbage collector", "[GC]")
 
     tester.Upsert(0, 1000);
     tester.Upsert(0, 1000);
-    size_t max_cnt = GetDirEntriesCount(dir_path);
+    size_t max_cnt = utils::DirEntryCount(dir_path);
     for (int i = 0; i < 20; i++)
     {
         tester.Upsert(500, 1000);
         // Do validate after each write to try to ensure the file GC is
         // finished.
         tester.Validate();
-        size_t cnt = GetDirEntriesCount(dir_path);
+        size_t cnt = utils::DirEntryCount(dir_path);
         CHECK(cnt <= max_cnt);
     }
 }

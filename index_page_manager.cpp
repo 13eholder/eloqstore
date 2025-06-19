@@ -120,6 +120,17 @@ std::pair<RootMeta *, KvError> IndexPageManager::FindRoot(
         assert(!meta->root_page_->IsDetached());
         EnqueuIndexPage(meta->root_page_);
     }
+
+    if (meta->mapper_ == nullptr)
+    {
+        // Partition not found. Possible causes:
+        // 1. During the initial write to a non-existent partition,
+        //    WriteTask creates a stub RootMeta (with mapper=nullptr).
+        // 2. A MemIndexPage referencing this stub RootMeta is created.
+        // 3. WriteTask aborts, but the stub RootMeta cannot be cleared
+        //    because it is still referenced by the MemIndexPage.
+        return {meta, KvError::NotFound};
+    }
     return {meta, KvError::NoError};
 }
 
@@ -156,9 +167,9 @@ KvError IndexPageManager::MakeCowRoot(const TableIdent &tbl_ident,
     {
         return err;
     }
-    meta->mapping_snapshots_.insert(cow_meta.mapper_->GetMapping());
-    // RootMeta is referenced by this new MappingSnapshot.
-    meta->Pin();
+    auto it = meta->mapping_snapshots_.insert(cow_meta.mapper_->GetMapping());
+    CHECK(it.second);
+    meta->Pin();  // Referenced by new MappingSnapshot.
     return KvError::NoError;
 }
 
@@ -350,7 +361,8 @@ void IndexPageManager::FreeMappingSnapshot(MappingSnapshot *mapping)
             static_cast<PooledFilePages *>(meta.mapper_->FilePgAllocator());
         pool->Free(std::move(mapping->to_free_file_pages_));
     }
-    meta.mapping_snapshots_.erase(mapping);
+    auto n = meta.mapping_snapshots_.erase(mapping);
+    CHECK(n == 1);
     meta.Unpin();
 }
 
@@ -403,7 +415,7 @@ void IndexPageManager::EvictRootIfEmpty(
     std::unordered_map<TableIdent, RootMeta>::iterator root_it)
 {
     RootMeta &meta = root_it->second;
-    if (meta.ref_cnt_ == 0)
+    if (!meta.IsPinned())
     {
         DLOG(INFO) << "metadata of " << root_it->first << " is evicted";
         tbl_roots_.erase(root_it);
@@ -423,6 +435,7 @@ bool IndexPageManager::RecyclePage(MemIndexPage *page)
         {
             meta.mapper_ = nullptr;
             meta.root_page_ = nullptr;
+            meta.ref_cnt_ = 0;
         }
         else
         {
@@ -437,8 +450,8 @@ bool IndexPageManager::RecyclePage(MemIndexPage *page)
         {
             mapping->Unswizzling(page);
         }
+        meta.Unpin();
     }
-    meta.Unpin();
     EvictRootIfEmpty(tbl_it);
 
     // Removes the page from the active list.

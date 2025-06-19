@@ -38,9 +38,9 @@ struct KvOptions
      */
     uint32_t manifest_limit = 8 << 20;  // 8MB
     /**
-     * @brief Max amount of opened files per shard.
+     * @brief Max number of open files.
      */
-    uint32_t fd_limit = 4096;
+    uint32_t fd_limit = 10000;
     /**
      * @brief Size of io-uring submission queue per shard.
      */

@@ -52,6 +52,7 @@ struct RootMeta
     RootMeta() = default;
     RootMeta(const RootMeta &rhs) = delete;
     RootMeta(RootMeta &&rhs) = default;
+    bool IsPinned() const;
     void Pin();
     void Unpin();
 

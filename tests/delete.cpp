@@ -75,17 +75,27 @@ TEST_CASE("easy truncate table partition", "[truncate]")
 TEST_CASE("truncate table partition", "[truncate]")
 {
     kvstore::EloqStore *store = InitStore(mem_store_opts);
-    MapVerifier verify(test_tbl_id, store);
+    MapVerifier verify(test_tbl_id, store, false);
     verify.SetValueSize(100);
 
     verify.Upsert(1, 100000);
     verify.Truncate(100000);
+    verify.Validate();
     verify.Truncate(50000);
+    verify.Validate();
     verify.Truncate(10000);
     verify.Truncate(1);
+    verify.Validate();
     verify.Truncate(0);
 
     verify.Upsert(1, 100000);
     verify.Truncate(50000);
+    verify.Validate();
     verify.Truncate(0);
+    verify.Validate();
+
+    verify.SetValueSize(10000);
+    verify.Upsert(1, 10000);
+    verify.Clean();
+    verify.Validate();
 }

@@ -56,7 +56,8 @@ char *VarPagePtr(const VarPage &page)
     return ptr;
 }
 
-std::unique_ptr<AsyncIoManager> AsyncIoManager::Instance(const EloqStore *store)
+std::unique_ptr<AsyncIoManager> AsyncIoManager::Instance(const EloqStore *store,
+                                                         uint32_t fd_limit)
 {
     const KvOptions *opts = &store->Options();
     if (opts->store_path.empty())
@@ -65,16 +66,17 @@ std::unique_ptr<AsyncIoManager> AsyncIoManager::Instance(const EloqStore *store)
     }
     else if (opts->cloud_store_path.empty())
     {
-        return std::make_unique<IouringMgr>(opts);
+        return std::make_unique<IouringMgr>(opts, fd_limit);
     }
     else
     {
         ObjectStore *obj_store = store->obj_store_.get();
-        return std::make_unique<CloudStoreMgr>(opts, obj_store);
+        return std::make_unique<CloudStoreMgr>(opts, fd_limit, obj_store);
     }
 }
 
-IouringMgr::IouringMgr(const KvOptions *opts) : AsyncIoManager(opts)
+IouringMgr::IouringMgr(const KvOptions *opts, uint32_t fd_limit)
+    : AsyncIoManager(opts), fd_limit_(fd_limit)
 {
     lru_fd_head_.next_ = &lru_fd_tail_;
     lru_fd_tail_.prev_ = &lru_fd_head_;
@@ -114,14 +116,17 @@ KvError IouringMgr::Init(Shard *shard)
         return KvError::IoFail;
     }
 
-    ret = io_uring_register_files_sparse(&ring_, options_->fd_limit);
-    if (ret < 0)
+    if (fd_limit_ > 0)
     {
-        LOG(ERROR) << "failed to reserve register file slots: " << ret;
-        io_uring_queue_exit(&ring_);
-        return KvError::OpenFileLimit;
+        ret = io_uring_register_files_sparse(&ring_, fd_limit_);
+        if (ret < 0)
+        {
+            LOG(ERROR) << "failed to reserve register file slots: " << ret;
+            io_uring_queue_exit(&ring_);
+            return KvError::OpenFileLimit;
+        }
+        free_reg_slots_.reserve(fd_limit_);
     }
-    free_reg_slots_.reserve(options_->fd_limit);
 
     uint16_t num_bufs = options_->buf_ring_size;
     assert(num_bufs);
@@ -578,15 +583,14 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
         {
         case LruFD::FdEmpty:
         {
-            FdIdx root_fd = GetRootFD(tbl_id);
+            // Note: Never yield between compare FdEmpty and set FdLocked
             lru_fd.Get()->fd_ = LruFD::FdLocked;
-
-            EvictFD();
 
             int fd;
             KvError error = KvError::NoError;
             if (file_id == LruFD::kDirectory)
             {
+                FdIdx root_fd = GetRootFD(tbl_id);
                 std::string dirname = tbl_id.ToString();
                 fd = OpenAt(root_fd, dirname.c_str(), oflags_dir);
                 if (fd == -ENOENT && create)
@@ -599,8 +603,8 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
                 fd = OpenFile(tbl_id, file_id, direct);
                 if (fd == -ENOENT && create)
                 {
-                    // This can only be a data file because manifest is always
-                    // created by WriteSnapshot.
+                    // This must be data file because manifest should always be
+                    // created by call WriteSnapshot.
                     assert(file_id <= LruFD::kMaxDataFile);
                     auto [dfd_ref, err] =
                         OpenOrCreateFD(tbl_id, LruFD::kDirectory);
@@ -614,6 +618,7 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
 
             if (fd < 0)
             {
+                // Open or create failed.
                 if (error == KvError::NoError)
                 {
                     error = ToKvError(fd);
@@ -640,7 +645,6 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
             lru_fd.Get()->fd_ = fd;
             // notify all waiting tasks success
             lru_fd.Get()->waiting_.WakeAll();
-            lru_fd_count_++;
             break;
         }
         case LruFD::FdLocked:
@@ -813,6 +817,9 @@ int IouringMgr::OpenAt(FdIdx dir_fd,
                        uint64_t flags,
                        uint64_t mode)
 {
+    lru_fd_count_++;
+    EvictFD();
+
     io_uring_sqe *sqe = GetSQE(UserDataType::KvTask, ThdTask());
     if (dir_fd.second)
     {
@@ -820,7 +827,13 @@ int IouringMgr::OpenAt(FdIdx dir_fd,
     }
     open_how how = {.flags = flags, .mode = mode, .resolve = 0};
     io_uring_prep_openat2(sqe, dir_fd.first, path, &how);
-    return ThdTask()->WaitIoResult();
+    int fd = ThdTask()->WaitIoResult();
+
+    if (fd < 0)
+    {
+        lru_fd_count_--;
+    }
+    return fd;
 }
 
 int IouringMgr::Read(FdIdx fd, char *dst, size_t n, uint64_t offset)
@@ -956,6 +969,10 @@ int IouringMgr::Close(int fd)
         LOG(ERROR) << "close file/directory " << fd
                    << " failed: " << strerror(-res);
     }
+    else
+    {
+        lru_fd_count_--;
+    }
     return res;
 }
 
@@ -997,13 +1014,12 @@ KvError IouringMgr::CloseFile(LruFD::Ref fd_ref)
     }
     lru_fd->fd_ = LruFD::FdEmpty;
     lru_fd->waiting_.WakeAll();
-    lru_fd_count_--;
     return KvError::NoError;
 }
 
 bool IouringMgr::EvictFD()
 {
-    while (lru_fd_count_ >= options_->fd_limit)
+    while (lru_fd_count_ > fd_limit_)
     {
         LruFD *lru_fd = lru_fd_tail_.prev_;
         if (lru_fd == &lru_fd_head_)
@@ -1024,7 +1040,7 @@ uint32_t IouringMgr::AllocRegisterIndex()
     uint32_t idx = UINT32_MAX;
     if (free_reg_slots_.empty())
     {
-        if (alloc_reg_slot_ < options_->fd_limit)
+        if (alloc_reg_slot_ < fd_limit_)
         {
             idx = alloc_reg_slot_++;
         }
@@ -1535,8 +1551,10 @@ void IouringMgr::WriteReq::SetPage(VarPage page)
     }
 }
 
-CloudStoreMgr::CloudStoreMgr(const KvOptions *opts, ObjectStore *obj_store)
-    : IouringMgr(opts), file_cleaner_(this), obj_store_(obj_store)
+CloudStoreMgr::CloudStoreMgr(const KvOptions *opts,
+                             uint32_t fd_limit,
+                             ObjectStore *obj_store)
+    : IouringMgr(opts, fd_limit), file_cleaner_(this), obj_store_(obj_store)
 {
     lru_file_head_.next_ = &lru_file_tail_;
     lru_file_tail_.prev_ = &lru_file_head_;

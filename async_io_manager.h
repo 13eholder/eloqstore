@@ -54,7 +54,8 @@ class AsyncIoManager
 public:
     AsyncIoManager(const KvOptions *opts) : options_(opts) {};
     virtual ~AsyncIoManager() = default;
-    static std::unique_ptr<AsyncIoManager> Instance(const EloqStore *store);
+    static std::unique_ptr<AsyncIoManager> Instance(const EloqStore *store,
+                                                    uint32_t fd_limit);
 
     /** These methods are provided for worker thread. */
     virtual KvError Init(Shard *shard) = 0;
@@ -99,7 +100,7 @@ KvError ToKvError(int err_no);
 class IouringMgr : public AsyncIoManager
 {
 public:
-    IouringMgr(const KvOptions *opts);
+    IouringMgr(const KvOptions *opts, uint32_t fd_limit);
     ~IouringMgr() override;
     KvError Init(Shard *shard) override;
     void Submit() override;
@@ -232,8 +233,8 @@ protected:
         uint64_t file_size_;
         uint64_t file_offset_{0};
         std::unique_ptr<char, decltype(&std::free)> buf_{nullptr, &std::free};
-        uint16_t buf_end_{0};
-        uint16_t buf_offset_{0};
+        uint32_t buf_end_{0};
+        uint32_t buf_offset_{0};
     };
 
     static std::pair<void *, UserDataType> DecodeUserData(uint64_t user_data);
@@ -331,6 +332,7 @@ protected:
     LruFD lru_fd_head_{nullptr, MaxFileId};
     LruFD lru_fd_tail_{nullptr, MaxFileId};
     uint32_t lru_fd_count_{0};
+    const uint32_t fd_limit_;
 
     uint32_t alloc_reg_slot_{0};
     std::vector<uint32_t> free_reg_slots_;
@@ -347,7 +349,9 @@ protected:
 class CloudStoreMgr : public IouringMgr
 {
 public:
-    CloudStoreMgr(const KvOptions *opts, ObjectStore *obj_store);
+    CloudStoreMgr(const KvOptions *opts,
+                  uint32_t fd_limit,
+                  ObjectStore *obj_store);
     void Start() override;
     void PollComplete() override;
     KvError SwitchManifest(const TableIdent &tbl_id,

@@ -4,6 +4,8 @@
 
 namespace kvstore
 {
+constexpr uint32_t num_reserved_fd = 100;
+
 inline std::pair<std::string_view, std::string_view> ParseFileName(
     std::string_view name)
 {

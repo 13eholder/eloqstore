@@ -8,7 +8,7 @@
 using namespace test_util;
 
 const kvstore::KvOptions cloud_options = {
-    .fd_limit = 30,
+    .fd_limit = 30 + kvstore::num_reserved_fd,
     .num_gc_threads = 0,
     .local_space_limit = 100 << 20,  // 100MB
     .store_path = {"./test-data"},
@@ -72,8 +72,8 @@ TEST_CASE("cloud store cached file LRU", "[cloud]")
 {
     kvstore::KvOptions options = cloud_options;
     options.manifest_limit = 8 << 10;
-    options.fd_limit = 5;
-    options.local_space_limit = 1 << 20;
+    options.fd_limit = 20 + kvstore::num_reserved_fd;
+    options.local_space_limit = 2 << 20;
     options.num_retained_archives = 1;
     options.archive_interval_secs = 3;
     options.pages_per_file_shift = 5;

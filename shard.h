@@ -15,7 +15,7 @@ namespace kvstore
 class Shard
 {
 public:
-    Shard(const EloqStore *store);
+    Shard(const EloqStore *store, uint32_t fd_limit);
     KvError Init();
     void Start();
     void Stop();

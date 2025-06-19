@@ -73,6 +73,11 @@ std::string_view ManifestBuilder::BuffView() const
     return buff_;
 }
 
+bool RootMeta::IsPinned() const
+{
+    return ref_cnt_ > 0;
+}
+
 void RootMeta::Pin()
 {
     ref_cnt_++;
