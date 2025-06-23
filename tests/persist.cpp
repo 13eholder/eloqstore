@@ -203,6 +203,18 @@ TEST_CASE("random overflow kv", "[persist][overflow_kv]")
     verifier.WriteRnd(1, 100);
 }
 
+TEST_CASE("concurrency with overflow kv", "[overflow_kv]")
+{
+    kvstore::KvOptions options{
+        .num_threads = 4,
+        .store_path = {test_path},
+    };
+    kvstore::EloqStore *store = InitStore(options);
+    ConcurrencyTester tester(store, "t0", 10, 1000, 4, 50000);
+    tester.Init();
+    tester.Run(100, 100, 100);
+}
+
 TEST_CASE("easy append only mode", "[persist][append]")
 {
     kvstore::KvOptions options{

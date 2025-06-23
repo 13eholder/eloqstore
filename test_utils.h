@@ -120,6 +120,7 @@ private:
         uint32_t id_;
         std::vector<uint32_t> kvs_;
         uint32_t ticks_{0};
+        std::vector<kvstore::WriteDataEntry> entries_;
         kvstore::BatchWriteRequest req_;
         uint32_t verify_cnt_{0};
     };
@@ -127,7 +128,9 @@ private:
     void Wake(kvstore::KvRequest *req);
     void ExecRead(Reader *reader);
     void VerifyRead(Reader *reader, uint32_t write_pause);
+    void RetryWrite(Partition &partition);
     void ExecWrite(Partition &partition);
+    bool HasWriting() const;
 
     std::string DebugSegment(uint32_t partition_id,
                              uint16_t seg_id,

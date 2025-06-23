@@ -468,11 +468,6 @@ uint32_t ConcurrencyTester::Partition::FinishedRounds() const
 
 void ConcurrencyTester::Partition::FinishWrite()
 {
-    if (req_.RetryableErr())
-    {
-        LOG(WARNING) << "write error " << req_.ErrMessage();
-        return;
-    }
     CHECK(req_.Error() == kvstore::KvError::NoError);
     verify_cnt_ = 0;
     ticks_++;
@@ -636,7 +631,7 @@ std::string ConcurrencyTester::DebugSegment(
     return kvs_str;
 }
 
-void ConcurrencyTester::ExecWrite(ConcurrencyTester::Partition &partition)
+void ConcurrencyTester::ExecWrite(Partition &partition)
 {
     assert(!partition.IsWriting());
     partition.ticks_++;
@@ -689,13 +684,31 @@ void ConcurrencyTester::ExecWrite(ConcurrencyTester::Partition &partition)
             }
         }
     }
+    partition.entries_ = std::move(entries);
+    RetryWrite(partition);
+}
 
+void ConcurrencyTester::RetryWrite(Partition &partition)
+{
+    auto entries = partition.entries_;
     partition.req_.SetArgs({tbl_name_, partition.id_}, std::move(entries));
     uint64_t user_data = (partition.id_ | (uint64_t(1) << 63));
     bool ok = store_->ExecAsyn(&partition.req_,
                                user_data,
                                [this](kvstore::KvRequest *req) { Wake(req); });
     CHECK(ok);
+}
+
+bool ConcurrencyTester::HasWriting() const
+{
+    for (const Partition &partition : partitions_)
+    {
+        if (partition.IsWriting())
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void ConcurrencyTester::Init()
@@ -764,7 +777,6 @@ void ConcurrencyTester::Run(uint16_t n_readers,
 {
     uint16_t running_readers = 0;
     // Start readers
-    CHECK(n_readers * ops >= partitions_.size());
     std::vector<Reader> readers(n_readers);
     for (Reader &reader : readers)
     {
@@ -773,7 +785,7 @@ void ConcurrencyTester::Run(uint16_t n_readers,
         ExecRead(&reader);
     }
 
-    while (running_readers > 0)
+    while (running_readers > 0 || HasWriting())
     {
         uint64_t user_data;
         finished_reqs_.wait_dequeue(user_data);
@@ -783,6 +795,12 @@ void ConcurrencyTester::Run(uint16_t n_readers,
         if (is_write)
         {
             Partition &partition = partitions_[id];
+            if (partition.req_.RetryableErr())
+            {
+                LOG(WARNING) << "write error " << partition.req_.ErrMessage();
+                RetryWrite(partition);
+                continue;
+            }
             partition.FinishWrite();
             if (write_pause == 0 && partition.FinishedRounds() < ops)
             {

@@ -226,6 +226,7 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
         LruFD::Ref fd_ref_;
         uint32_t offset_;
         Page page_{false};
+        bool done_{false};
     };
 
     // ReadReq is a temporary object, so we allocate it on stack.
@@ -264,6 +265,11 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
         bool all_finished = true;
         for (ReadReq &req : reqs)
         {
+            if (req.done_)
+            {
+                continue;
+            }
+
             int res = req.res_;
             if (req.flags_ & IORING_CQE_F_BUFFER)
             {
@@ -275,6 +281,7 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
             if ((res >= 0 && res < options_->data_page_size) ||
                 err == KvError::TryAgain)
             {
+                // Try again.
                 send_req(&req);
                 all_finished = false;
             }
@@ -285,6 +292,12 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
                 // after returned.
                 ThdTask()->WaitIo();
                 return err;
+            }
+            else
+            {
+                // Successfully read this page.
+                assert(res == options_->data_page_size);
+                req.done_ = true;
             }
         }
         if (all_finished)
@@ -301,7 +314,8 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
         if (!ValidatePageChecksum(req.page_.Ptr(), options_->data_page_size))
         {
             FileId file_id = req.fd_ref_.Get()->file_id_;
-            LOG(ERROR) << "corrupted " << tbl_id << " file " << file_id;
+            LOG(ERROR) << "corrupted " << tbl_id << " file " << file_id
+                       << " at " << req.offset_;
             return KvError::Corrupted;
         }
     }

@@ -96,7 +96,7 @@ void PagesPool::Free(char *ptr)
     assert(ptr != nullptr);
 #ifndef NDEBUG
     // Fill with junk data for debugging purposes.
-    memset(ptr, 0, options_->data_page_size);
+    memset(ptr, 123, options_->data_page_size);
 #endif
     FreePage *free_page = reinterpret_cast<FreePage *>(ptr);
     free_page->next_ = free_head_;

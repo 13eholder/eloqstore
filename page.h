@@ -60,6 +60,10 @@ public:
     Page(const Page &) = delete;
     Page &operator=(const Page &) = delete;
     ~Page();
+    friend void swap(Page &lhs, Page &rhs)
+    {
+        std::swap(lhs.ptr_, rhs.ptr_);
+    }
     void Free();
     char *Ptr() const;
 
