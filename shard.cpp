@@ -1,7 +1,6 @@
 #include "shard.h"
 
-#include "async_io_listener.h"
-#include "eloqstore_module.h"
+#include <bthread/eloq_module.h>
 
 namespace kvstore
 {
@@ -29,21 +28,53 @@ KvError Shard::Init()
 
 void Shard::WorkLoop()
 {
+    shard = this;
+    io_mgr_->Start();
+
+    // Get new requests from the queue, only blocked when there are no requests
+    // and no active tasks.
+    // This allows the thread to exit gracefully when the store is stopped.
+    std::array<KvRequest *, 128> reqs;
+    auto dequeue_requests = [this, &reqs]() -> int
+    {
+        size_t nreqs = requests_.try_dequeue_bulk(reqs.data(), reqs.size());
+        if (nreqs == 0 && task_mgr_.NumActive() == 0 && io_mgr_->IsIdle())
+        {
+            // Idle state, wait for new requests or exit.
+            while (nreqs == 0)
+            {
+                if (store_->IsStopped())
+                {
+                    return -1;
+                }
+                const auto timeout = std::chrono::milliseconds(100);
+                nreqs = requests_.wait_dequeue_bulk_timed(
+                    reqs.data(), reqs.size(), timeout);
+            }
+        }
+        return nreqs;
+    };
+
     while (true)
     {
-        size_t req_cnt = 0;
-        WorkOneRound(req_cnt);
-
-        if (req_cnt == 0)
+        int nreqs = dequeue_requests();
+        if (nreqs < 0)
         {
-            if (store_->IsStopped())
-            {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
+            break;
         }
+        for (size_t i = 0; i < nreqs; i++)
+        {
+            OnReceivedReq(reqs[i]);
+        }
+
+        io_mgr_->Submit();
+        io_mgr_->PollComplete();
+
+        ResumeScheduled();
+        PollFinished();
     }
+
+    io_mgr_->Stop();
 }
 
 void Shard::Start()
@@ -51,13 +82,7 @@ void Shard::Start()
 #ifdef ELOQ_MODULE_ENABLED
     io_mgr_->Start();
 #else
-    thd_ = std::thread(
-        [this]
-        {
-            shard = this;
-            io_mgr_->Start();
-            WorkLoop();
-        });
+    thd_ = std::thread([this] { WorkLoop(); });
 #endif
 }
 

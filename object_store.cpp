@@ -124,8 +124,6 @@ KvError ObjectStore::ExecRclone(std::string_view cmd) const
     while (true)
     {
         int res = system(cmd.data());
-        DLOG(INFO) << cmd << " => " << res;
-
         // See https://rclone.org/docs/#list-of-exit-codes
         switch (WEXITSTATUS(res))
         {

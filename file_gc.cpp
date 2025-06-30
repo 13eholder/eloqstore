@@ -79,14 +79,11 @@ void FileGarbageCollector::GCRoutine()
         }
         const TableIdent *tbl_id = req.mapping_->tbl_ident_;
         fs::path partition_path = tbl_id->StorePath(options_->store_path);
-        DLOG(INFO) << "File GC started: " << partition_path;
         KvError err = Execute(options_,
                               partition_path,
                               req.mapping_.get(),
                               req.mapping_ts_,
                               req.max_file_id_);
-        DLOG(INFO) << "File GC finished: " << partition_path << " : "
-                   << ErrorString(err);
     }
 }
 
@@ -198,23 +195,17 @@ KvError FileGarbageCollector::Execute(const KvOptions *opts,
     }
 
     // Clear unsed data files by any archive.
-    uint32_t rm_cnt = 0;
     for (FileId file_id : gc_data_files)
     {
         if (!retained_data_files.contains(file_id))
         {
             path.replace_filename(DataFileName(file_id));
-            if (fs::remove(path))
-            {
-                rm_cnt++;
-            }
-            else
+            if (!fs::remove(path))
             {
                 LOG(ERROR) << "can not remove " << path;
             }
         }
     }
-    LOG(INFO) << "File GC cleared " << rm_cnt << " data files";
     return KvError::NoError;
 }
 

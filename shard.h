@@ -1,15 +1,13 @@
 #pragma once
 
 #include <boost/context/pooled_fixedsize_stack.hpp>
-#include <condition_variable>
 
-#include "async_io_listener.h"
 #include "eloq_store.h"
 #include "task_manager.h"
 
 // https://github.com/cameron314/concurrentqueue/issues/280
 #undef BLOCK_SIZE
-#include "concurrentqueue/concurrentqueue.h"
+#include "concurrentqueue/blockingconcurrentqueue.h"
 
 namespace kvstore
 {
@@ -94,7 +92,7 @@ private:
     }
 
     size_t shard_id_{0};
-    moodycamel::ConcurrentQueue<KvRequest *> requests_;
+    moodycamel::BlockingConcurrentQueue<KvRequest *> requests_;
     std::thread thd_;
     PagesPool page_pool_;
     std::unique_ptr<AsyncIoManager> io_mgr_;

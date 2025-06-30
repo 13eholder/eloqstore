@@ -275,6 +275,7 @@ void EloqStore::Stop()
     {
         shard->Stop();
     }
+
     if (obj_store_ != nullptr)
     {
         obj_store_->Stop();
@@ -283,6 +284,8 @@ void EloqStore::Stop()
     {
         file_gc_->Stop();
     }
+
+    // Start clear resources after all threads stopped.
 
     shards_.clear();
 

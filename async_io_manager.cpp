@@ -75,6 +75,11 @@ std::unique_ptr<AsyncIoManager> AsyncIoManager::Instance(const EloqStore *store,
     }
 }
 
+bool AsyncIoManager::IsIdle()
+{
+    return true;
+}
+
 IouringMgr::IouringMgr(const KvOptions *opts, uint32_t fd_limit)
     : AsyncIoManager(opts), fd_limit_(fd_limit)
 {
@@ -347,7 +352,7 @@ std::pair<ManifestFilePtr, KvError> IouringMgr::GetManifest(
     {
         return {nullptr, err};
     }
-    struct statx result;
+    struct statx result = {};
     int res = Statx(fd.Get()->fd_, "", &result);
     if (res < 0)
     {
@@ -355,6 +360,7 @@ std::pair<ManifestFilePtr, KvError> IouringMgr::GetManifest(
         return {nullptr, ToKvError(res)};
     }
     uint64_t file_size = result.stx_size;
+    assert(file_size > 0);
     auto manifest = std::make_unique<Manifest>(this, std::move(fd), file_size);
     return {std::move(manifest), KvError::NoError};
 }
@@ -1332,6 +1338,10 @@ IouringMgr::Manifest::Manifest(IouringMgr *io_mgr, LruFD::Ref fd, uint64_t size)
 {
     char *p = (char *) std::aligned_alloc(page_align, buf_size);
     assert(p);
+#ifndef NDEBUG
+    // Fill with junk data for debugging purposes.
+    std::memset(p, 123, buf_size);
+#endif
     buf_ = {p, std::free};
 };
 
@@ -1604,6 +1614,16 @@ void CloudStoreMgr::Start()
             file_cleaner_.Run();
             return std::move(shard->main_);
         });
+}
+
+bool CloudStoreMgr::IsIdle()
+{
+    return file_cleaner_.status_ == TaskStatus::Idle;
+}
+
+void CloudStoreMgr::Stop()
+{
+    file_cleaner_.Shutdown();
 }
 
 void CloudStoreMgr::PollComplete()
@@ -1943,6 +1963,7 @@ TaskType CloudStoreMgr::FileCleaner::Type() const
 
 void CloudStoreMgr::FileCleaner::Run()
 {
+    killed_ = false;
     const KvOptions *opts = io_mgr_->options_;
     const size_t reserve_space = opts->reserve_space_ratio == 0
                                      ? 0
@@ -1975,6 +1996,11 @@ void CloudStoreMgr::FileCleaner::Run()
             requesting_.WakeAll();
             status_ = TaskStatus::Idle;
             Yield();
+            if (killed_)
+            {
+                // File cleaner is killed, exit the work loop.
+                break;
+            }
             status_ = TaskStatus::Ongoing;
             continue;
         }
@@ -2028,6 +2054,14 @@ void CloudStoreMgr::FileCleaner::Run()
         }
         DLOG(INFO) << "file cleaner send " << req_count << " unlink requests";
     }
+}
+
+void CloudStoreMgr::FileCleaner::Shutdown()
+{
+    // Wake up file cleaner to stop it.
+    assert(status_ == TaskStatus::Idle);
+    killed_ = true;
+    coro_ = coro_.resume();
 }
 
 MemStoreMgr::MemStoreMgr(const KvOptions *opts) : AsyncIoManager(opts)

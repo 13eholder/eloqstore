@@ -943,24 +943,32 @@ void ManifestVerifier::Verify()
     kvstore::KvError err = replayer.Replay(&file);
     CHECK(err == kvstore::KvError::NoError);
     CHECK(replayer.root_ == root_id_);
-
-    auto get_map_tbl = [](std::vector<uint64_t> tbl)
-        -> std::unordered_map<kvstore::PageId, kvstore::FilePageId>
-    {
-        std::unordered_map<kvstore::PageId, kvstore::FilePageId> map_tbl;
-        for (kvstore::PageId page_id; uint64_t val : tbl)
-        {
-            if (kvstore::MappingSnapshot::IsFilePageId(val))
-            {
-                map_tbl[page_id] = kvstore::MappingSnapshot::DecodeId(val);
-            }
-            page_id++;
-        }
-        return map_tbl;
-    };
     auto mapper = replayer.GetMapper(&idx_mgr_, &tbl_id_);
-    auto map_tbl_a = get_map_tbl(mapper->GetMapping()->mapping_tbl_);
-    auto map_tbl_b = get_map_tbl(answer_.GetMapping()->mapping_tbl_);
-    CHECK(map_tbl_a == map_tbl_b);
+
+    const auto &answer_map = answer_.GetMapping()->mapping_tbl_;
+    const auto &recovered_map = mapper->GetMapping()->mapping_tbl_;
+    auto it_answer = answer_map.begin();
+    auto it_recovered = recovered_map.begin();
+
+    while (it_answer != answer_map.end() && it_recovered != recovered_map.end())
+    {
+        if (*it_answer != *it_recovered)
+        {
+            CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_answer));
+            CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_recovered));
+        }
+        it_answer++;
+        it_recovered++;
+    }
+    while (it_answer != answer_map.end())
+    {
+        CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_answer));
+        it_answer++;
+    }
+    while (it_recovered != recovered_map.end())
+    {
+        CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_recovered));
+        it_recovered++;
+    }
 }
 }  // namespace test_util
