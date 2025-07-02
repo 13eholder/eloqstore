@@ -43,6 +43,7 @@ public:
     PagesPool *PagePool();
 
     const EloqStore *store_;
+    const size_t shard_id_{0};
     boost::context::continuation main_;
     KvTask *running_;
     CircularQueue<KvTask *> scheduled_;
@@ -98,7 +99,6 @@ private:
         running_ = nullptr;
     }
 
-    size_t shard_id_{0};
     moodycamel::BlockingConcurrentQueue<KvRequest *> requests_;
     std::thread thd_;
     PagesPool page_pool_;

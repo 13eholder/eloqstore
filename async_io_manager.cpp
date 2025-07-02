@@ -227,7 +227,7 @@ KvError IouringMgr::ReadPages(const TableIdent &tbl_id,
             : BaseReq(task),
               fd_ref_(std::move(fd)),
               offset_(offset),
-              page_(true){};
+              page_(true) {};
 
         LruFD::Ref fd_ref_;
         uint32_t offset_;
@@ -928,7 +928,7 @@ KvError IouringMgr::SyncFiles(const TableIdent &tbl_id,
     struct FsyncReq : BaseReq
     {
         FsyncReq(KvTask *task, LruFD::Ref fd)
-            : BaseReq(task), fd_ref_(std::move(fd)){};
+            : BaseReq(task), fd_ref_(std::move(fd)) {};
         LruFD::Ref fd_ref_;
     };
 
@@ -1630,15 +1630,26 @@ void CloudStoreMgr::PollComplete()
 {
     IouringMgr::PollComplete();
 
-    std::array<ObjectStore::Task *, 128> buf;
-    size_t n = obj_store_->complete_q_.try_dequeue_bulk(buf.data(), buf.size());
+    std::array<KvTask *, 128> buf;
+    size_t n = obj_complete_q_.try_dequeue_bulk(buf.data(), buf.size());
     while (n > 0)
     {
         for (size_t i = 0; i < n; i++)
         {
-            buf[i]->kv_task_->Resume();
+            buf[i]->Resume();
         }
-        n = obj_store_->complete_q_.try_dequeue_bulk(buf.data(), buf.size());
+        if (n == buf.size())
+        {
+            n = obj_complete_q_.try_dequeue_bulk(buf.data(), buf.size());
+        }
+        else
+        {
+            assert(n < buf.size());
+            // There is a high likelihood that the queue has been exhausted by
+            // the previous dequeue operation and no new entries was added
+            // during KvTask::Resume because it is fast.
+            break;
+        }
     }
 }
 
@@ -1718,6 +1729,11 @@ KvError CloudStoreMgr::CreateArchive(const TableIdent &tbl_id,
     used_local_space_ += options_->manifest_limit;
     EnqueClosedFile(FileKey(tbl_id, name));
     return err;
+}
+
+void CloudStoreMgr::OnObjectStoreComplete(KvTask *task)
+{
+    obj_complete_q_.enqueue(task);
 }
 
 int CloudStoreMgr::CreateFile(LruFD::Ref dir_fd, FileId file_id)
@@ -1935,7 +1951,7 @@ int CloudStoreMgr::ReserveCacheSpace(size_t size)
 KvError CloudStoreMgr::DownloadFile(const TableIdent &tbl_id, FileId file_id)
 {
     std::string filename = ToFilename(file_id);
-    ObjectStore::DownloadTask obj_task(ThdTask(), &tbl_id, filename);
+    ObjectStore::DownloadTask obj_task(this, ThdTask(), &tbl_id, filename);
     obj_store_->submit_q_.enqueue(&obj_task);
     ThdTask()->status_ = TaskStatus::Blocked;
     ThdTask()->Yield();
@@ -1949,7 +1965,8 @@ KvError CloudStoreMgr::UploadFiles(const TableIdent &tbl_id,
     {
         return KvError::NoError;
     }
-    ObjectStore::UploadTask obj_task(ThdTask(), &tbl_id, std::move(filenames));
+    ObjectStore::UploadTask obj_task(
+        this, ThdTask(), &tbl_id, std::move(filenames));
     obj_store_->submit_q_.enqueue(&obj_task);
     ThdTask()->status_ = TaskStatus::Blocked;
     ThdTask()->Yield();

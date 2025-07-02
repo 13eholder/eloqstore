@@ -45,6 +45,12 @@ fs::path TableIdent::StorePath(std::span<const std::string> disks) const
     return partition_path;
 }
 
+uint16_t TableIdent::ShardIndex(uint16_t num_shards) const
+{
+    assert(num_shards > 0);
+    return partition_id_ % num_shards;
+}
+
 bool TableIdent::IsValid() const
 {
     return !tbl_name_.empty();

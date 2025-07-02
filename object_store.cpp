@@ -2,6 +2,8 @@
 
 #include <glog/logging.h>
 
+#include "async_io_manager.h"
+
 namespace kvstore
 {
 ObjectStore::~ObjectStore()
@@ -112,7 +114,7 @@ void ObjectStore::WorkLoop()
 
         task->error_ = ExecRclone(command);
 
-        complete_q_.enqueue(task);
+        task->io_mgr_->OnObjectStoreComplete(task->kv_task_);
     }
 }
 

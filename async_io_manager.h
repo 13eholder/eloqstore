@@ -18,6 +18,7 @@
 
 #include "error.h"
 #include "kv_options.h"
+#include "object_store.h"
 #include "task.h"
 #include "types.h"
 
@@ -26,7 +27,6 @@ namespace kvstore
 class WriteReq;
 class WriteTask;
 class MemIndexPage;
-class ObjectStore;
 
 class ManifestFile
 {
@@ -374,6 +374,7 @@ public:
     KvError CreateArchive(const TableIdent &tbl_id,
                           std::string_view snapshot,
                           uint64_t ts) override;
+    void OnObjectStoreComplete(KvTask *task);
 
 private:
     int CreateFile(LruFD::Ref dir_fd, FileId file_id) override;
@@ -452,6 +453,7 @@ private:
     FileCleaner file_cleaner_;
 
     ObjectStore *obj_store_;
+    moodycamel::ConcurrentQueue<KvTask *> obj_complete_q_;
 };
 
 class MemStoreMgr : public AsyncIoManager

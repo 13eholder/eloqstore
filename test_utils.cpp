@@ -686,14 +686,12 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
             }
         }
     }
-    partition.entries_ = std::move(entries);
-    RetryWrite(partition);
+    partition.req_.SetArgs({tbl_name_, partition.id_}, std::move(entries));
+    SendWrite(partition);
 }
 
-void ConcurrencyTester::RetryWrite(Partition &partition)
+void ConcurrencyTester::SendWrite(Partition &partition)
 {
-    auto entries = partition.entries_;
-    partition.req_.SetArgs({tbl_name_, partition.id_}, std::move(entries));
     uint64_t user_data = (partition.id_ | (uint64_t(1) << 63));
     bool ok = store_->ExecAsyn(&partition.req_,
                                user_data,
@@ -800,7 +798,7 @@ void ConcurrencyTester::Run(uint16_t n_readers,
             if (partition.req_.RetryableErr())
             {
                 LOG(WARNING) << "write error " << partition.req_.ErrMessage();
-                RetryWrite(partition);
+                SendWrite(partition);
                 continue;
             }
             partition.FinishWrite();

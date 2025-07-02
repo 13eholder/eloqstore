@@ -8,6 +8,7 @@
 using namespace test_util;
 
 const kvstore::KvOptions cloud_options = {
+    .manifest_limit = 1 << 20,
     .fd_limit = 30 + kvstore::num_reserved_fd,
     .num_gc_threads = 0,
     .local_space_limit = 100 << 20,  // 100MB
@@ -101,4 +102,20 @@ TEST_CASE("cloud store cached file LRU", "[cloud]")
         rand_tester()->Read(rand() % max_key);
         rand_tester()->Read(rand() % max_key);
     }
+}
+
+TEST_CASE("concurrenct test with cloud", "[cloud]")
+{
+    kvstore::KvOptions options = cloud_options;
+    options.num_threads = 4;
+    options.rclone_threads = 8;
+    options.fd_limit = 100 + kvstore::num_reserved_fd;
+    options.reserve_space_ratio = 5;
+    options.local_space_limit = 500 << 20;  // 100MB
+    kvstore::EloqStore *store = InitStore(options);
+
+    ConcurrencyTester tester(store, "t1", 50, 1000);
+    tester.Init();
+    tester.Run(1000, 100, 10);
+    tester.Clear();
 }

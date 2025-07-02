@@ -13,6 +13,7 @@
 namespace kvstore
 {
 class KvTask;
+class CloudStoreMgr;
 
 class ObjectStore
 {
@@ -26,8 +27,8 @@ public:
     class Task
     {
     public:
-        Task(KvTask *kv_task, const TableIdent *tbl_id)
-            : kv_task_(kv_task), tbl_id_(tbl_id) {};
+        Task(CloudStoreMgr *io_mgr, KvTask *kv_task, const TableIdent *tbl_id)
+            : kv_task_(kv_task), tbl_id_(tbl_id), io_mgr_(io_mgr) {};
         enum class Type : uint8_t
         {
             Download = 0,
@@ -41,16 +42,18 @@ public:
 
     protected:
         const TableIdent *tbl_id_;
+        CloudStoreMgr *io_mgr_{nullptr};
         friend class ObjectStore;
     };
 
     class DownloadTask : public Task
     {
     public:
-        DownloadTask(KvTask *kv_task,
+        DownloadTask(CloudStoreMgr *io_mgr,
+                     KvTask *kv_task,
                      const TableIdent *tbl_id,
                      std::string_view filename)
-            : Task(kv_task, tbl_id), filename_(filename) {};
+            : Task(io_mgr, kv_task, tbl_id), filename_(filename) {};
         Type TaskType() override
         {
             return Type::Download;
@@ -61,10 +64,12 @@ public:
     class UploadTask : public Task
     {
     public:
-        UploadTask(KvTask *kv_task,
+        UploadTask(CloudStoreMgr *io_mgr,
+                   KvTask *kv_task,
                    const TableIdent *tbl_id,
                    std::vector<std::string> filenames)
-            : Task(kv_task, tbl_id), filenames_(std::move(filenames)) {};
+            : Task(io_mgr, kv_task, tbl_id),
+              filenames_(std::move(filenames)) {};
         Type TaskType() override
         {
             return Type::Upload;
@@ -73,13 +78,12 @@ public:
     };
 
     moodycamel::BlockingConcurrentQueue<Task *> submit_q_;
-    moodycamel::ConcurrentQueue<Task *> complete_q_;
 
 private:
     class StopSignal : public Task
     {
     public:
-        StopSignal() : Task(nullptr, nullptr) {};
+        StopSignal() : Task(nullptr, nullptr, nullptr) {};
         Type TaskType() override
         {
             return Type::Stop;

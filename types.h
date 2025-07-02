@@ -40,12 +40,12 @@ struct TableIdent
 
     TableIdent() = default;
     TableIdent(std::string tbl_name, uint32_t id)
-        : tbl_name_(std::move(tbl_name)), partition_id_(id){};
+        : tbl_name_(std::move(tbl_name)), partition_id_(id) {};
     std::string ToString() const;
     static TableIdent FromString(const std::string &str);
     uint8_t DiskIndex(uint8_t num_disks) const;
     fs::path StorePath(std::span<const std::string> disks) const;
-    size_t Hash() const;
+    uint16_t ShardIndex(uint16_t num_shards) const;
     bool IsValid() const;
 
     std::string tbl_name_;

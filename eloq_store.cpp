@@ -14,11 +14,14 @@
 
 #include "archive_crond.h"
 #include "common.h"
-#include "eloqstore_module.h"
 #include "file_gc.h"
 #include "object_store.h"
 #include "shard.h"
 #include "utils.h"
+
+#ifdef ELOQ_MODULE_ENABLED
+#include "eloqstore_module.h"
+#endif
 
 namespace kvstore
 {
@@ -255,7 +258,7 @@ bool EloqStore::SendRequest(KvRequest *req)
     req->err_ = KvError::NoError;
     req->done_.store(false, std::memory_order_relaxed);
 
-    Shard *shard = shards_[req->TableId().partition_id_ % shards_.size()].get();
+    Shard *shard = shards_[req->TableId().ShardIndex(shards_.size())].get();
     return shard->AddKvRequest(req);
 }
 
