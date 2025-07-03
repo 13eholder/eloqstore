@@ -20,7 +20,7 @@ class KillPoint
 {
 public:
     static KillPoint &GetInstance();
-    KillPoint() : gen(std::random_device{}()) {};
+    KillPoint() : gen(std::random_device{}()){};
     KillPoint(const KillPoint &) = delete;
     KillPoint &operator=(const KillPoint &) = delete;
 

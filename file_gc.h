@@ -19,7 +19,7 @@ class MappingSnapshot;
 class FileGarbageCollector
 {
 public:
-    FileGarbageCollector(const KvOptions *opts) : options_(opts) {};
+    FileGarbageCollector(const KvOptions *opts) : options_(opts){};
     ~FileGarbageCollector();
     void Start(uint16_t n_workers);
     void Stop();

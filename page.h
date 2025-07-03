@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-#include "xxhash.h"
+#include "external/xxhash.h"
 
 namespace kvstore
 {

@@ -81,7 +81,6 @@ set(ELOQ_STORE_SOURCES
     shard.cpp
     root_meta.cpp
     replayer.cpp
-    xxhash.c
     kill_point.cpp
     file_gc.cpp
     archive_crond.cpp
@@ -89,6 +88,7 @@ set(ELOQ_STORE_SOURCES
     types.cpp
     kv_options.cpp
     eloqstore_module.cpp
+    external/xxhash.c
     async_io_listener.cpp)
 
 add_library(eloqstore STATIC ${ELOQ_STORE_SOURCES} ${INI_SOURCES})
