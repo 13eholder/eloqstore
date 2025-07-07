@@ -26,14 +26,22 @@ IndexPageManager::IndexPageManager(AsyncIoManager *io_manager)
 
 IndexPageManager::~IndexPageManager()
 {
+    // Destructs page mapper first, because destructing the mapping snapshot
+    // needs to access the root table in the index page manager.
+    std::vector<PageMapper *> mappers;
+    mappers.reserve(tbl_roots_.size());
     for (auto &[tbl, meta] : tbl_roots_)
     {
-        // Destructs page mapper first, because destructing the mapping snapshot
-        // needs to access the root table in the index page manager.
-        if (meta.mapper_)
+        // We can not call FreeMappingSnapshot directly in this loop, because it
+        // may delete elements from the root table we are currently iterating.
+        if (meta.mapper_ != nullptr)
         {
-            meta.mapper_->FreeMappingSnapshot();
+            mappers.push_back(meta.mapper_.get());
         }
+    }
+    for (PageMapper *mapper : mappers)
+    {
+        mapper->FreeMappingSnapshot();
     }
 }
 
