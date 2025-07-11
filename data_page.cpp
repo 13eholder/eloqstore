@@ -83,14 +83,9 @@ char *DataPage::PagePtr() const
     return page_.Ptr();
 }
 
-Page DataPage::GetPtr()
+void DataPage::SetPage(Page page)
 {
-    return std::move(page_);
-}
-
-void DataPage::SetPtr(Page ptr)
-{
-    page_ = std::move(ptr);
+    page_ = std::move(page);
 }
 
 void DataPage::Clear()
@@ -293,7 +288,11 @@ std::pair<bool, uint16_t> DataPageIter::SearchRegion(std::string_view key) const
 
         std::string_view pivot{key_ptr, non_shared};
         cmp_ret = cmp_->Compare(pivot, key);
-        if (cmp_ret < 0)
+        if (cmp_ret == 0)
+        {
+            return {true, mid};
+        }
+        else if (cmp_ret < 0)
         {
             left = mid + 1;
             cnt -= step + 1;
@@ -442,6 +441,53 @@ const char *DataPageIter::DecodeEntry(const char *p,
         return nullptr;
     }
     return p;
+}
+
+DataRegionIter::DataRegionIter(std::string_view page)
+{
+    Reset(page);
+}
+
+void DataRegionIter::Reset(std::string_view page)
+{
+    assert(DecodeFixed16(page.data() + DataPage::page_size_offset) ==
+           page.size());
+    page_ = page;
+    const char *end = page.data() + page.size();
+    num_regions_ = DecodeFixed16(end - sizeof(uint16_t));
+    restart_array_ = end - sizeof(uint16_t) * (num_regions_ + 1);
+    assert(num_regions_ > 0);
+    cur_region_idx_ = 0;
+}
+
+std::string_view DataRegionIter::Region() const
+{
+    uint16_t offset = RegionOffset(cur_region_idx_);
+    uint16_t size = RegionOffset(cur_region_idx_ + 1) - offset;
+    return {page_.data() + offset, size};
+}
+
+bool DataRegionIter::Valid() const
+{
+    return cur_region_idx_ < num_regions_;
+}
+
+void DataRegionIter::Next()
+{
+    assert(Valid());
+    cur_region_idx_++;
+}
+
+uint16_t DataRegionIter::RegionOffset(uint16_t region_idx) const
+{
+    if (region_idx < num_regions_)
+    {
+        return DecodeFixed16(restart_array_ + region_idx * sizeof(uint16_t));
+    }
+    else
+    {
+        return restart_array_ - page_.data();
+    }
 }
 
 OverflowPage::OverflowPage(PageId page_id, Page page)

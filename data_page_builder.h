@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "kv_options.h"
+#include "page.h"
 
 namespace kvstore
 {
@@ -74,6 +75,22 @@ private:
     bool finished_;  // Has Finish() been called?
     std::string last_key_;
     int64_t last_timestamp_{0};
+};
+
+class FastDataPageBuilder
+{
+public:
+    explicit FastDataPageBuilder(const KvOptions *options);
+    void Reset(char *ptr);
+    bool AddRegion(std::string_view region);
+    size_t CurrentSize() const;
+    void Finish();
+
+private:
+    const KvOptions *const options_;
+    char *ptr_{nullptr};
+    uint16_t end_offset_{0};
+    std::vector<uint16_t> region_offsets_;
 };
 
 }  // namespace kvstore

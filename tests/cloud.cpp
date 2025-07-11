@@ -90,21 +90,21 @@ TEST_CASE("cloud store cached file LRU", "[cloud]")
     }
 
     auto rand_tester = [&partitions]() -> MapVerifier *
-    { return partitions[rand() % partitions.size()].get(); };
+    { return partitions[std::rand() % partitions.size()].get(); };
 
     const uint32_t max_key = 3000;
     for (int i = 0; i < 20; i++)
     {
-        uint32_t key = rand() % max_key;
+        uint32_t key = std::rand() % max_key;
         rand_tester()->WriteRnd(key, key + (max_key / 10));
 
-        rand_tester()->Read(rand() % max_key);
-        rand_tester()->Read(rand() % max_key);
-        rand_tester()->Read(rand() % max_key);
+        rand_tester()->Read(std::rand() % max_key);
+        rand_tester()->Read(std::rand() % max_key);
+        rand_tester()->Read(std::rand() % max_key);
     }
 }
 
-TEST_CASE("concurrenct test with cloud", "[cloud]")
+TEST_CASE("concurrent test with cloud", "[cloud]")
 {
     kvstore::KvOptions options = cloud_options;
     options.num_threads = 4;

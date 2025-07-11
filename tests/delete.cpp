@@ -55,7 +55,7 @@ TEST_CASE("random upsert/delete and scan", "[delete]")
         verify.WriteRnd(1, max_val, 20, 30);
         for (int j = 0; j < 5; j++)
         {
-            uint64_t start = rand() % max_val;
+            uint64_t start = std::rand() % max_val;
             verify.Scan(start, start + 100);
         }
     }
@@ -154,7 +154,7 @@ TEST_CASE("expire timestamp", "[TTL]")
     const uint32_t range_size = 10000;
     for (size_t i = 0; i < 100; i++)
     {
-        const uint32_t begin = rand() % range_size;
+        const uint32_t begin = std::rand() % range_size;
         switch (i % 5)
         {
         case 0:

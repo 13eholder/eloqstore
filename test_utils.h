@@ -50,6 +50,7 @@ public:
 
     void Read(uint64_t key);
     void Read(std::string_view key);
+    void Floor(uint64_t key);
     void Floor(std::string_view key);
     void Scan(uint64_t begin,
               uint64_t end,

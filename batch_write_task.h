@@ -37,9 +37,17 @@ private:
                             std::string idx_page_key,
                             PageId page_id,
                             bool elevate);
-    KvError FinishDataPage(std::string_view page_view,
-                           std::string page_key,
-                           PageId page_id);
+    KvError FinishDataPage(std::string page_key, PageId page_id);
+
+    /**
+     * @brief Balance two adjacent data pages by transferring data regions from
+     * the previous page to the current page.
+     * @param prev_page The previous page is expected to be larger than the
+     * current page, and will be modified in-place.
+     * @param cur_page The current page before redistributing.
+     * @return The current page after redistributing.
+     */
+    Page Redistribute(DataPage &prev_page, std::string_view cur_page);
 
     /**
      * @brief Pops up the index stack such that the top index entry contains the
@@ -109,7 +117,7 @@ private:
      * @param page The new page.
      * @param old_fp File page id of the old page.
      */
-    KvError LeafLinkUpdate(DataPage &&page);
+    void LeafLinkUpdate(DataPage &&page);
     /**
      * @brief Insert new page into leaf link list.
      *

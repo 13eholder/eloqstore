@@ -4,7 +4,6 @@
 #include <liburing.h>
 #include <sys/types.h>
 
-#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>

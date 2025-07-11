@@ -11,7 +11,9 @@ TEST_CASE("delete scan", "[scan]")
 {
     kvstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
-    verify.Upsert(1, 100);
+    verify.SetValueSize(400);
+    verify.WriteRnd(1, 100);
+    verify.WriteRnd(1, 100);
     verify.Delete(50, 70);
     verify.Scan(100, 200);
     verify.Delete(0, 1000);
@@ -49,7 +51,7 @@ TEST_CASE("random write and scan", "[scan]")
         verify.WriteRnd(1, max_val, 0, 20);
         for (int j = 0; j < 5; j++)
         {
-            uint64_t start = rand() % max_val;
+            uint64_t start = std::rand() % max_val;
             verify.Scan(start, start + 100);
         }
     }

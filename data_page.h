@@ -20,6 +20,15 @@ enum class ValLenBit : uint8_t
     BitsCount
 };
 
+/**
+ * Format:
+ * +------------+--------+------------------+-------------+-------------+
+ * |checksum(8B)|type(1B)|content length(2B)|prev page(4B)|next page(4B)|
+ * +------------+--------+------------------+-------------+-------------+
+ * +---------+-------------------+---------------+-------------+
+ * |data blob|restart array(N*2B)|restart num(2B)|padding bytes|
+ * +---------+-------------------+---------------+-------------+
+ */
 class DataPage
 {
 public:
@@ -47,8 +56,7 @@ public:
     void SetPageId(PageId page_id);
     PageId GetPageId() const;
     char *PagePtr() const;
-    Page GetPtr();
-    void SetPtr(Page ptr);
+    void SetPage(Page page);
     void Clear();
 
 private:
@@ -122,6 +130,23 @@ private:
     bool overflow_;
     uint64_t timestamp_;
     uint64_t expire_ts_;
+};
+
+class DataRegionIter
+{
+public:
+    explicit DataRegionIter(std::string_view page);
+    void Reset(std::string_view page);
+    std::string_view Region() const;
+    bool Valid() const;
+    void Next();
+
+private:
+    uint16_t RegionOffset(uint16_t region_idx) const;
+    std::string_view page_;
+    uint16_t cur_region_idx_{0};
+    uint16_t num_regions_;
+    const char *restart_array_{nullptr};
 };
 
 /**

@@ -186,26 +186,26 @@ void MapVerifier::WriteRnd(uint64_t begin,
     std::vector<kvstore::WriteDataEntry> entries;
     for (size_t idx = begin; idx < end; ++idx)
     {
-        if ((rand() % max) >= density)
+        if ((std::rand() % max) >= density)
         {
             continue;
         }
 
         std::string key = Key(idx, key_len_);
         uint64_t ts = ts_;
-        if ((rand() % max) < del)
+        if ((std::rand() % max) < del)
         {
             entries.emplace_back(
                 std::move(key), std::string(), ts, kvstore::WriteOp::Delete);
         }
         else
         {
-            uint32_t len = (rand() % val_size_) + 1;
+            uint32_t len = (std::rand() % val_size_) + 1;
             std::string val = Value(ts + idx, len);
             uint64_t expire_ts = 0;
-            if (max_ttl_ > 0 && (rand() & 1))
+            if (max_ttl_ > 0 && (std::rand() & 1))
             {
-                expire_ts = now_ts + rand() % max_ttl_;
+                expire_ts = now_ts + std::rand() % max_ttl_;
             }
             entries.emplace_back(std::move(key),
                                  std::move(val),
@@ -257,6 +257,11 @@ void MapVerifier::Read(std::string_view key)
             answer_.erase(it);
         }
     }
+}
+
+void MapVerifier::Floor(uint64_t key)
+{
+    Floor(Key(key, key_len_));
 }
 
 void MapVerifier::Floor(std::string_view key)
@@ -508,7 +513,7 @@ void ConcurrencyTester::ExecRead(Reader *reader)
     reader->partition_id_ = (reader->partition_id_ + 1) % partitions_.size();
     const Partition &partition = partitions_[reader->partition_id_];
     reader->start_tick_ = partition.ticks_;
-    reader->begin_ = (rand() % seg_count_) * seg_size_;
+    reader->begin_ = (std::rand() % seg_count_) * seg_size_;
     reader->end_ = reader->begin_ + seg_size_;
     EncodeKey(reader->begin_key_, reader->begin_);
     EncodeKey(reader->end_key_, reader->end_);
@@ -641,7 +646,7 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
     std::vector<kvstore::WriteDataEntry> entries;
     const size_t total_size = partition.kvs_.size();
     uint32_t left = seg_sum_;
-    uint32_t i = (rand() % seg_count_) * seg_size_;
+    uint32_t i = (std::rand() % seg_count_) * seg_size_;
     for (; i < total_size; i++)
     {
         uint32_t new_val = 0;
@@ -651,9 +656,9 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
             new_val = left;
             left = seg_sum_;
         }
-        else if (rand() % 3 != 0)
+        else if (std::rand() % 3 != 0)
         {
-            new_val = rand() % (val_size_ * 3);
+            new_val = std::rand() % (val_size_ * 3);
             new_val = std::min(new_val, left);
             left -= new_val;
         }
@@ -680,7 +685,7 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
 
         if (last)
         {
-            if ((rand() & 1) == 0)
+            if ((std::rand() & 1) == 0)
             {
                 i += seg_size_;
             }
@@ -858,7 +863,7 @@ ManifestVerifier::ManifestVerifier(kvstore::KvOptions opts)
 std::pair<kvstore::PageId, kvstore::FilePageId> ManifestVerifier::RandChoose()
 {
     CHECK(!helper_.empty());
-    auto it = std::next(helper_.begin(), rand() % helper_.size());
+    auto it = std::next(helper_.begin(), std::rand() % helper_.size());
     return *it;
 }
 

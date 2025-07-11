@@ -123,12 +123,11 @@ KvError BatchWriteTask::ShiftLeafLink()
     return KvError::NoError;
 }
 
-KvError BatchWriteTask::LeafLinkUpdate(DataPage &&page)
+void BatchWriteTask::LeafLinkUpdate(DataPage &&page)
 {
     page.SetNextPageId(applying_page_.NextPageId());
     page.SetPrevPageId(applying_page_.PrevPageId());
     leaf_triple_[1] = std::move(page);
-    return ShiftLeafLink();
 }
 
 KvError BatchWriteTask::LeafLinkInsert(DataPage &&page)
@@ -136,15 +135,15 @@ KvError BatchWriteTask::LeafLinkInsert(DataPage &&page)
     assert(!TripleElement(1));
     leaf_triple_[1] = std::move(page);
     DataPage &new_elem = leaf_triple_[1];
-    if (TripleElement(0) == nullptr)
+    DataPage *prev_page = TripleElement(0);
+    if (prev_page == nullptr)
     {
         // Add first element into empty link list
         assert(stack_.back()->idx_page_iter_.GetPageId() == MaxPageId);
         new_elem.SetNextPageId(MaxPageId);
         new_elem.SetPrevPageId(MaxPageId);
-        return ShiftLeafLink();
+        return KvError::NoError;
     }
-    DataPage *prev_page = TripleElement(0);
     assert(stack_.back()->idx_page_iter_.GetPageId() == MaxPageId ||
            prev_page->NextPageId() == applying_page_.NextPageId());
     if (prev_page->NextPageId() != MaxPageId)
@@ -156,7 +155,7 @@ KvError BatchWriteTask::LeafLinkInsert(DataPage &&page)
     new_elem.SetPrevPageId(prev_page->GetPageId());
     new_elem.SetNextPageId(prev_page->NextPageId());
     prev_page->SetNextPageId(new_elem.GetPageId());
-    return ShiftLeafLink();
+    return KvError::NoError;
 }
 
 KvError BatchWriteTask::LeafLinkDelete()
@@ -318,6 +317,7 @@ KvError BatchWriteTask::ApplyBatch(PageId &root_id, bool update_ttl)
         new_root = new_page;
     }
     root_id = new_root == nullptr ? MaxPageId : new_root->GetPageId();
+
     return KvError::NoError;
 }
 
@@ -362,7 +362,6 @@ KvError BatchWriteTask::LoadApplyingPage(PageId page_id)
 KvError BatchWriteTask::ApplyOnePage(size_t &cidx, uint64_t now_ms)
 {
     assert(!stack_.empty());
-
     KvError err;
     DataPage *base_page = nullptr;
     std::string_view page_left_bound{};
@@ -457,9 +456,7 @@ KvError BatchWriteTask::ApplyOnePage(size_t &cidx, uint64_t now_ms)
                 }
 
                 // Finishes the current page.
-                std::string_view page_view = data_page_builder_.Finish();
-                KvError err = FinishDataPage(
-                    page_view, std::move(curr_page_key), page_id);
+                KvError err = FinishDataPage(std::move(curr_page_key), page_id);
                 CHECK_KV_ERR(err);
                 // Starts a new page.
                 curr_page_key = cmp->FindShortestSeparator(
@@ -652,8 +649,7 @@ KvError BatchWriteTask::ApplyOnePage(size_t &cidx, uint64_t now_ms)
     }
     else
     {
-        std::string_view page_view = data_page_builder_.Finish();
-        err = FinishDataPage(page_view, std::move(curr_page_key), page_id);
+        err = FinishDataPage(std::move(curr_page_key), page_id);
         CHECK_KV_ERR(err);
     }
     assert(!TripleElement(1));
@@ -951,36 +947,128 @@ KvError BatchWriteTask::FinishIndexPage(MemIndexPage *idx_page,
     return KvError::NoError;
 }
 
-KvError BatchWriteTask::FinishDataPage(std::string_view page_view,
-                                       std::string page_key,
-                                       PageId page_id)
+KvError BatchWriteTask::FinishDataPage(std::string page_key, PageId page_id)
 {
-    PageId new_page_id =
-        page_id == MaxPageId ? cow_meta_.mapper_->GetPage() : page_id;
-    DataPage new_page(new_page_id);
-    memcpy(new_page.PagePtr(), page_view.data(), page_view.size());
-
+    const uint16_t cur_page_len = data_page_builder_.CurrentSizeEstimate();
+    std::string_view page_view = data_page_builder_.Finish();
     if (page_id == MaxPageId)
     {
+        page_id = cow_meta_.mapper_->GetPage();
+        DataPage new_data_page(false);
+        new_data_page.SetPageId(page_id);
+        // Redistributing only if the current page length is smaller than one
+        // quarter of data_page_size and the previous page length is bigger than
+        // three quarter of data_page_size.
+        const uint16_t one_quarter = Options()->data_page_size >> 2;
+        const uint16_t three_quarter = Options()->data_page_size - one_quarter;
+        DataPage *prev_page = TripleElement(0);
+        if (cur_page_len < one_quarter && prev_page != nullptr &&
+            prev_page->RestartNum() > 1 &&
+            prev_page->ContentLength() > three_quarter)
+        {
+            // This page is too small, redistribute it with the previous page.
+            Page page = Redistribute(*prev_page, page_view);
+            new_data_page.SetPage(std::move(page));
+            DataPageIter iter(&new_data_page, Options());
+            assert(iter.HasNext());
+            iter.Next();
+            page_key.assign(iter.Key());
+        }
+        else
+        {
+            new_data_page.SetPage(Page(true));
+            memcpy(new_data_page.PagePtr(), page_view.data(), page_view.size());
+        }
+
         // This is a new data page that does not exist in the tree and has a new
         // page Id.
-        KvError err = LeafLinkInsert(std::move(new_page));
+        KvError err = LeafLinkInsert(std::move(new_data_page));
         CHECK_KV_ERR(err);
-
         // This is a new page that does not exist in the parent index page.
         // Elevates to the parent index page.
         assert(stack_.back()->changes_.empty() ||
                stack_.back()->changes_.back().key_ < page_key);
         stack_.back()->changes_.emplace_back(
-            std::move(page_key), new_page_id, WriteOp::Upsert);
+            std::move(page_key), page_id, WriteOp::Upsert);
     }
     else
     {
+        DataPage new_page(page_id);
+        memcpy(new_page.PagePtr(), page_view.data(), page_view.size());
         // This is an existing data page with updated content.
-        KvError err = LeafLinkUpdate(std::move(new_page));
-        CHECK_KV_ERR(err);
+        LeafLinkUpdate(std::move(new_page));
     }
-    return KvError::NoError;
+    return ShiftLeafLink();
+}
+
+Page BatchWriteTask::Redistribute(DataPage &prev_page,
+                                  std::string_view cur_page)
+{
+    const uint16_t prev_page_len = prev_page.ContentLength();
+    const uint16_t cur_page_len =
+        DecodeFixed16(cur_page.data() + DataPage::page_size_offset);
+    assert(prev_page_len > cur_page_len);
+    const uint16_t average_len = (prev_page_len + cur_page_len) >> 1;
+    assert(prev_page_len >= average_len);
+
+    DataRegionIter iter({prev_page.PagePtr(), prev_page_len});
+    uint16_t preserve_region_cnt = 0;
+    // Number of bytes occupied by header and tailer (number of regions).
+    uint16_t preserve_len = DataPageBuilder::HeaderSize() + sizeof(uint16_t);
+    while (preserve_len < average_len)
+    {
+        // Skip preserved regions for previous page.
+        assert(iter.Valid());
+        std::string_view region = iter.Region();
+        // Space for region data and region offset
+        preserve_len += region.size() + sizeof(uint16_t);
+        preserve_region_cnt++;
+        iter.Next();
+    }
+    assert(preserve_len <= prev_page_len);
+    Page new_page(true);
+    if (preserve_len == prev_page_len)
+    {
+        // Corner case: can not move any region from the previous page.
+        std::memcpy(new_page.Ptr(), cur_page.data(), cur_page.size());
+        return new_page;
+    }
+
+    // Merge last several regions of previous page with current page.
+    FastDataPageBuilder builder(Options());
+    for (builder.Reset(new_page.Ptr()); iter.Valid(); iter.Next())
+    {
+        std::string_view region = iter.Region();
+        builder.AddRegion(region);
+    }
+    std::string_view content = cur_page.substr(0, cur_page_len);
+    for (iter.Reset(content); iter.Valid(); iter.Next())
+    {
+        std::string_view region = iter.Region();
+        builder.AddRegion(region);
+    }
+    builder.Finish();
+
+    // Update previous page in-place.
+    iter.Reset({prev_page.PagePtr(), prev_page_len});
+    builder.Reset(prev_page.PagePtr());
+    for (uint16_t i = 0; i < preserve_region_cnt; i++)
+    {
+        // Copy preserved regions.
+        std::string_view region = iter.Region();
+        builder.AddRegion(region);
+        iter.Next();
+    }
+    builder.Finish();
+
+#ifndef NDEBUG
+    assert(prev_page.RestartNum() == preserve_region_cnt);
+    assert(prev_page.ContentLength() == preserve_len);
+    const uint16_t new_page_len =
+        DecodeFixed16(new_page.Ptr() + DataPage::page_size_offset);
+    assert(prev_page_len + cur_page_len == preserve_len + new_page_len);
+#endif
+    return new_page;
 }
 
 std::string_view BatchWriteTask::LeftBound(bool is_data_page)

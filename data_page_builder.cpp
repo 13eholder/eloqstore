@@ -216,4 +216,55 @@ bool DataPageBuilder::Add(std::string_view key,
     return true;
 }
 
+FastDataPageBuilder::FastDataPageBuilder(const KvOptions *options)
+    : options_(options)
+{
+}
+
+void FastDataPageBuilder::Reset(char *ptr)
+{
+    ptr_ = ptr;
+    end_offset_ = DataPageBuilder::HeaderSize();
+    SetPageType(ptr_, PageType::Data);
+    region_offsets_.clear();
+}
+
+bool FastDataPageBuilder::AddRegion(std::string_view region)
+{
+    if (CurrentSize() + region.size() + sizeof(uint16_t) >
+        options_->data_page_size)
+    {
+        return false;
+    }
+    if (ptr_ + end_offset_ != region.data())
+    {
+        std::memcpy(ptr_ + end_offset_, region.data(), region.size());
+    }
+    region_offsets_.emplace_back(end_offset_);
+    end_offset_ += region.size();
+    return true;
+}
+
+size_t FastDataPageBuilder::CurrentSize() const
+{
+    return (end_offset_ +                                // Raw data buffer
+            region_offsets_.size() * sizeof(uint16_t) +  // Restart array
+            sizeof(uint16_t));                           // Restart array length
+}
+
+void FastDataPageBuilder::Finish()
+{
+    // Append restart array
+    for (uint16_t offset : region_offsets_)
+    {
+        EncodeFixed16(ptr_ + end_offset_, offset);
+        end_offset_ += sizeof(uint16_t);
+    }
+    EncodeFixed16(ptr_ + end_offset_, region_offsets_.size());
+    end_offset_ += sizeof(uint16_t);
+
+    // Stores the page size at the header after the page type.
+    EncodeFixed16(ptr_ + DataPage::page_size_offset, end_offset_);
+}
+
 }  // namespace kvstore
