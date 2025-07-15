@@ -60,14 +60,19 @@ public:
     {
         return RequestType::Read;
     }
-    void SetArgs(TableIdent tid, std::string_view key);
+    void SetArgs(TableIdent tbl_id, const char *key);
+    void SetArgs(TableIdent tbl_id, std::string_view key);
+    void SetArgs(TableIdent tbl_id, std::string key);
+    std::string_view Key() const;
 
-    // input
-    std::string_view key_;
     // output
     std::string value_;
     uint64_t ts_;
     uint64_t expire_ts_;
+
+private:
+    // input
+    std::variant<std::string_view, std::string> key_;
 };
 
 /**
@@ -81,15 +86,20 @@ public:
     {
         return RequestType::Floor;
     }
+    void SetArgs(TableIdent tbl_id, const char *key);
     void SetArgs(TableIdent tid, std::string_view key);
+    void SetArgs(TableIdent tid, std::string key);
+    std::string_view Key() const;
 
-    // input
-    std::string_view key_;
     // output
     std::string floor_key_;
     std::string value_;
     uint64_t ts_;
     uint64_t expire_ts_;
+
+private:
+    // input
+    std::variant<std::string_view, std::string> key_;
 };
 
 class ScanRequest : public KvRequest
@@ -110,6 +120,14 @@ public:
                  std::string_view begin,
                  std::string_view end,
                  bool begin_inclusive = true);
+    void SetArgs(TableIdent tbl_id,
+                 std::string begin,
+                 std::string end,
+                 bool begin_inclusive = true);
+    void SetArgs(TableIdent tbl_id,
+                 const char *begin,
+                 const char *end,
+                 bool begin_inclusive = true);
 
     /**
      * @brief Set the pagination of the scan result.
@@ -117,6 +135,9 @@ public:
      * @param size Limit the page size (byte).
      */
     void SetPagination(size_t entries, size_t size);
+
+    std::string_view BeginKey() const;
+    std::string_view EndKey() const;
 
     std::span<KvEntry> Entries();
 
@@ -139,8 +160,8 @@ public:
 private:
     // input
     bool begin_inclusive_;
-    std::string_view begin_key_;
-    std::string_view end_key_;
+    std::variant<std::string_view, std::string> begin_key_;
+    std::variant<std::string_view, std::string> end_key_;
     size_t page_entries_{SIZE_MAX};
     size_t page_size_{SIZE_MAX};
     // output

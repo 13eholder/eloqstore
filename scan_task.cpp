@@ -113,14 +113,14 @@ KvError ScanTask::Scan()
     size_t result_size = 0;
 
     ScanIterator iter(tbl_id);
-    KvError err = iter.Seek(req->begin_key_);
+    KvError err = iter.Seek(req->BeginKey());
     if (err != KvError::NoError)
     {
         return err == KvError::EndOfFile ? KvError::NoError : err;
     }
 
     if (!req->begin_inclusive_ &&
-        Comp()->Compare(iter.Key(), req->begin_key_) == 0)
+        Comp()->Compare(iter.Key(), req->BeginKey()) == 0)
     {
         err = iter.Next();
         if (err != KvError::NoError)
@@ -129,8 +129,8 @@ KvError ScanTask::Scan()
         }
     }
 
-    while (req->end_key_.empty() ||
-           Comp()->Compare(iter.Key(), req->end_key_) < 0)
+    while (req->EndKey().empty() ||
+           Comp()->Compare(iter.Key(), req->EndKey()) < 0)
     {
         // Check entries number limit.
         if (req->num_entries_ == req->page_entries_)

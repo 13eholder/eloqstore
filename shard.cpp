@@ -197,7 +197,7 @@ void Shard::ProcessReq(KvRequest *req)
         {
             auto read_req = static_cast<ReadRequest *>(req);
             KvError err = task->Read(req->TableId(),
-                                     read_req->key_,
+                                     read_req->Key(),
                                      read_req->value_,
                                      read_req->ts_,
                                      read_req->expire_ts_);
@@ -213,7 +213,7 @@ void Shard::ProcessReq(KvRequest *req)
         {
             auto floor_req = static_cast<FloorRequest *>(req);
             KvError err = task->Floor(req->TableId(),
-                                      floor_req->key_,
+                                      floor_req->Key(),
                                       floor_req->floor_key_,
                                       floor_req->value_,
                                       floor_req->ts_,

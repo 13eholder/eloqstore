@@ -342,16 +342,52 @@ void KvRequest::Wait() const
     done_.wait(false, std::memory_order_acquire);
 }
 
+void ReadRequest::SetArgs(TableIdent tbl_id, const char *key)
+{
+    assert(key != nullptr);
+    SetArgs(std::move(tbl_id), std::string_view(key));
+}
+
 void ReadRequest::SetArgs(TableIdent tbl_id, std::string_view key)
 {
     SetTableId(std::move(tbl_id));
-    key_ = key;
+    key_.emplace<std::string_view>(key);
+}
+
+void ReadRequest::SetArgs(TableIdent tbl_id, std::string key)
+{
+    SetTableId(std::move(tbl_id));
+    key_.emplace<std::string>(std::move(key));
+}
+
+std::string_view ReadRequest::Key() const
+{
+    return key_.index() == 0 ? std::get<std::string_view>(key_)
+                             : std::get<std::string>(key_);
+}
+
+void FloorRequest::SetArgs(TableIdent tbl_id, const char *key)
+{
+    assert(key != nullptr);
+    SetArgs(std::move(tbl_id), std::string_view(key));
 }
 
 void FloorRequest::SetArgs(TableIdent tbl_id, std::string_view key)
 {
     SetTableId(std::move(tbl_id));
-    key_ = key;
+    key_.emplace<std::string_view>(key);
+}
+
+void FloorRequest::SetArgs(TableIdent tbl_id, std::string key)
+{
+    SetTableId(std::move(tbl_id));
+    key_.emplace<std::string>(std::move(key));
+}
+
+std::string_view FloorRequest::Key() const
+{
+    return key_.index() == 0 ? std::get<std::string_view>(key_)
+                             : std::get<std::string>(key_);
 }
 
 void ScanRequest::SetArgs(TableIdent tbl_id,
@@ -360,9 +396,30 @@ void ScanRequest::SetArgs(TableIdent tbl_id,
                           bool begin_inclusive)
 {
     SetTableId(std::move(tbl_id));
-    begin_key_ = begin;
-    end_key_ = end;
+    begin_key_.emplace<std::string_view>(begin);
+    end_key_.emplace<std::string_view>(end);
     begin_inclusive_ = begin_inclusive;
+}
+
+void ScanRequest::SetArgs(TableIdent tbl_id,
+                          std::string begin,
+                          std::string end,
+                          bool begin_inclusive)
+{
+    SetTableId(std::move(tbl_id));
+    begin_key_.emplace<std::string>(std::move(begin));
+    end_key_.emplace<std::string>(std::move(end));
+    begin_inclusive_ = begin_inclusive;
+}
+
+void ScanRequest::SetArgs(TableIdent tbl_id,
+                          const char *begin,
+                          const char *end,
+                          bool begin_inclusive)
+{
+    std::string_view begin_key = begin == nullptr ? std::string_view{} : begin;
+    std::string_view end_key = begin == nullptr ? std::string_view{} : end;
+    SetArgs(std::move(tbl_id), begin_key, end_key, begin_inclusive);
 }
 
 void ScanRequest::SetPagination(size_t entries, size_t size)
@@ -374,6 +431,18 @@ void ScanRequest::SetPagination(size_t entries, size_t size)
     {
         entries_.reserve(page_entries_);
     }
+}
+
+std::string_view ScanRequest::BeginKey() const
+{
+    return begin_key_.index() == 0 ? std::get<std::string_view>(begin_key_)
+                                   : std::get<std::string>(begin_key_);
+}
+
+std::string_view ScanRequest::EndKey() const
+{
+    return end_key_.index() == 0 ? std::get<std::string_view>(end_key_)
+                                 : std::get<std::string>(end_key_);
 }
 
 std::span<KvEntry> ScanRequest::Entries()
