@@ -369,12 +369,11 @@ KvError IouringMgr::WritePage(const TableIdent &tbl_id,
                               VarPage page,
                               FilePageId file_page_id)
 {
-    TEST_KILL_POINT("WritePage:0")
     auto [file_id, offset] = ConvFilePageId(file_page_id);
     auto [fd_ref, err] = OpenOrCreateFD(tbl_id, file_id);
     CHECK_KV_ERR(err);
     fd_ref.Get()->dirty_ = true;
-    TEST_KILL_POINT("WritePage:1")
+    TEST_KILL_POINT("WritePage")
 
     auto [fd, registered] = fd_ref.FdPair();
     WriteReq *req = write_req_pool_->Alloc(std::move(fd_ref), std::move(page));
@@ -414,6 +413,7 @@ KvError IouringMgr::WritePages(const TableIdent &tbl_id,
         iov[i].iov_len = options_->data_page_size;
     }
     io_uring_prep_writev(sqe, fd, iov.data(), num_pages, offset);
+    TEST_KILL_POINT("WritePages")
 
     int ret = ThdTask()->WaitIoResult();
     if (ret < 0)
@@ -634,6 +634,7 @@ std::pair<IouringMgr::LruFD::Ref, KvError> IouringMgr::OpenOrCreateFD(
                     error = err;
                     if (dfd_ref != nullptr)
                     {
+                        TEST_KILL_POINT("OpenOrCreateFD:CreateFile")
                         fd = CreateFile(std::move(dfd_ref), file_id);
                     }
                 }
@@ -700,9 +701,7 @@ void IouringMgr::Submit()
     {
         return;
     }
-    TEST_KILL_POINT("Submit:0")
     int ret = io_uring_submit(&ring_);
-    TEST_KILL_POINT("Submit:1")
     if (ret < 0)
     {
         LOG(ERROR) << "iouring submit failed " << ret;
@@ -1155,12 +1154,11 @@ KvError IouringMgr::AppendManifest(const TableIdent &tbl_id,
                                    std::string_view log,
                                    uint64_t manifest_size)
 {
-    TEST_KILL_POINT("AppendManifest:GetOrCreateFD")
     assert(manifest_size > 0);
     auto [fd_ref, err] = OpenFD(tbl_id, LruFD::kManifest);
     CHECK_KV_ERR(err);
 
-    TEST_KILL_POINT("AppendManifest:Write")
+    TEST_KILL_POINT_WEIGHT("AppendManifest:Write", 10)
     int res = Write(fd_ref.FdPair(), log.data(), log.size(), manifest_size);
     if (res < 0)
     {
@@ -1168,7 +1166,7 @@ KvError IouringMgr::AppendManifest(const TableIdent &tbl_id,
         return ToKvError(res);
     }
 
-    TEST_KILL_POINT("AppendManifest:Fdatasync")
+    TEST_KILL_POINT_WEIGHT("AppendManifest:Sync", 10)
     return SyncFile(std::move(fd_ref));
 }
 
@@ -1192,7 +1190,7 @@ int IouringMgr::WriteSnapshot(LruFD::Ref dir_fd,
         LOG(ERROR) << "write temporary file failed " << strerror(-res);
         return res;
     }
-    TEST_KILL_POINT("AtomicWriteFile:before_fsync")
+    TEST_KILL_POINT_WEIGHT("AtomicWriteFile:Sync", 100)
     res = Fdatasync({tmp_fd, false});
     if (res < 0)
     {
@@ -1200,10 +1198,9 @@ int IouringMgr::WriteSnapshot(LruFD::Ref dir_fd,
         LOG(ERROR) << "fsync temporary file failed " << strerror(-res);
         return res;
     }
-    TEST_KILL_POINT("AtomicWriteFile:after_fsync")
 
     // Switch file on disk.
-    TEST_KILL_POINT("AtomicWriteFile:before_name")
+    TEST_KILL_POINT_WEIGHT("AtomicWriteFile:Rename", 100)
     res = Rename(dir_fd.FdPair(), tmpfile.c_str(), name.data());
     if (res < 0)
     {
@@ -1211,7 +1208,7 @@ int IouringMgr::WriteSnapshot(LruFD::Ref dir_fd,
         LOG(ERROR) << "rename temporary file failed " << strerror(-res);
         return res;
     }
-    TEST_KILL_POINT("AtomicWriteFile:fsync_dir")
+    TEST_KILL_POINT_WEIGHT("AtomicWriteFile:SyncDir", 100)
     res = Fdatasync(dir_fd.FdPair());
     if (res < 0)
     {
