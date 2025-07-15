@@ -6,7 +6,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class IndexPageManager;
 class MemIndexPage;
@@ -36,4 +36,4 @@ public:
         return TaskType::Read;
     }
 };
-}  // namespace kvstore
+}  // namespace eloqstore

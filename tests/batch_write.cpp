@@ -14,7 +14,7 @@ TEST_CASE("batch entry with smaller timestamp", "[batch_write]")
 
 TEST_CASE("mixed batch write with read", "[batch_write]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store, false);
     verify.SetValueSize(200);
     constexpr uint64_t max_val = 10000;

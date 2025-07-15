@@ -3,7 +3,7 @@
 #include "shard.h"
 #include "utils.h"
 
-namespace kvstore
+namespace eloqstore
 {
 KvError ArchiveTask::CreateArchive()
 {
@@ -30,4 +30,4 @@ KvError ArchiveTask::CreateArchive()
               << current_ts;
     return KvError::NoError;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

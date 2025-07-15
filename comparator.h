@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace kvstore
+namespace eloqstore
 {
 class Comparator
 {
@@ -60,4 +60,4 @@ public:
     static std::string_view NegativeInf();
     static std::string_view PositiveInf();
 };
-}  // namespace kvstore
+}  // namespace eloqstore

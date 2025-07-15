@@ -6,7 +6,7 @@
 #include "coding.h"
 #include "index_page_manager.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 PageMapper::PageMapper(IndexPageManager *idx_mgr, const TableIdent *tbl_ident)
@@ -372,4 +372,4 @@ void PooledFilePages::Free(std::vector<FilePageId> fp_ids)
     free_ids_.insert(free_ids_.end(), fp_ids.begin(), fp_ids.end());
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

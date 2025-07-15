@@ -8,7 +8,7 @@
 #include "error.h"
 #include "page_mapper.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class Replayer
 {
@@ -33,4 +33,4 @@ private:
     std::string log_buf_;
     std::string_view payload_;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

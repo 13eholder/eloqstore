@@ -9,7 +9,7 @@
 #include "coding.h"
 #include "data_page.h"
 
-namespace kvstore
+namespace eloqstore
 {
 DataPageBuilder::DataPageBuilder(const KvOptions *opt)
     : options_(opt), counter_(0), cnt_(0), finished_(false)
@@ -267,4 +267,4 @@ void FastDataPageBuilder::Finish()
     EncodeFixed16(ptr_ + DataPage::page_size_offset, end_offset_);
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

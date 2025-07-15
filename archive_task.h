@@ -2,7 +2,7 @@
 
 #include "write_task.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class ArchiveTask : public WriteTask
 {
@@ -13,4 +13,4 @@ public:
     }
     KvError CreateArchive();
 };
-}  // namespace kvstore
+}  // namespace eloqstore

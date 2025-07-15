@@ -9,7 +9,7 @@
 #include "eloq_store.h"
 #include "utils.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 ArchiveCrond::ArchiveCrond(EloqStore *store) : store_(store)
@@ -130,4 +130,4 @@ void ArchiveCrond::StartArchiving()
     LOG(INFO) << "Finished archiving " << total_partitions << " partitions, "
               << fail_cnt << " failed";
 }
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -2,7 +2,7 @@
 
 #include "write_task.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class CompactTask : public WriteTask
 {
@@ -17,4 +17,4 @@ public:
      */
     KvError CompactDataFile();
 };
-}  // namespace kvstore
+}  // namespace eloqstore

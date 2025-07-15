@@ -11,7 +11,7 @@
 #include "scan_task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class TaskManager
 {
@@ -83,4 +83,4 @@ private:
     TaskPool<ScanTask> scan_pool_{2048};
     size_t num_active_{0};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

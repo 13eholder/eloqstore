@@ -13,7 +13,7 @@
 #include "root_meta.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class KvTask;
 class PageMapper;
@@ -119,4 +119,4 @@ private:
 
     AsyncIoManager *io_manager_;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

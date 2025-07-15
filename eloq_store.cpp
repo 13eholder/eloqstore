@@ -23,7 +23,7 @@
 #include "eloqstore_module.h"
 #endif
 
-namespace kvstore
+namespace eloqstore
 {
 
 EloqStore::EloqStore(const KvOptions &opts) : options_(opts), stopped_(true)
@@ -73,7 +73,7 @@ EloqStore::~EloqStore()
 
 KvError EloqStore::Start()
 {
-    eloqstore = this;
+    eloq_store = this;
     // Initialize
     if (!options_.store_path.empty())
     {
@@ -445,4 +445,4 @@ void KvRequest::SetDone(KvError err)
     }
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

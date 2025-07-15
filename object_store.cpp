@@ -4,7 +4,7 @@
 
 #include "async_io_manager.h"
 
-namespace kvstore
+namespace eloqstore
 {
 ObjectStore::~ObjectStore()
 {
@@ -157,4 +157,4 @@ KvError ObjectStore::ExecRclone(std::string_view cmd) const
         }
     }
 }
-}  // namespace kvstore
+}  // namespace eloqstore

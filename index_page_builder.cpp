@@ -13,7 +13,7 @@
 #include "kv_options.h"
 #include "mem_index_page.h"
 
-namespace kvstore
+namespace eloqstore
 {
 IndexPageBuilder::IndexPageBuilder(const KvOptions *opt)
     : options_(opt), counter_(0), cnt_(0), finished_(false)
@@ -197,4 +197,4 @@ uint16_t IndexPageBuilder::TailMetaSize() const
     // restart array + restart array size
     return restarts_.size() * sizeof(uint16_t) + sizeof(uint16_t);
 }
-}  // namespace kvstore
+}  // namespace eloqstore

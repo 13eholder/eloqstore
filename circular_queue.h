@@ -3,7 +3,7 @@
 #include <memory>
 #include <utility>
 
-namespace kvstore
+namespace eloqstore
 {
 template <typename T>
 class CircularQueue
@@ -256,4 +256,4 @@ private:
     size_t cnt_;
     size_t capacity_;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

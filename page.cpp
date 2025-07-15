@@ -2,7 +2,7 @@
 
 #include "shard.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 PageType TypeOfPage(const char *p)
@@ -129,4 +129,4 @@ void PagesPool::Free(char *ptr)
     free_head_ = free_page;
     free_cnt_++;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

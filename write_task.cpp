@@ -17,7 +17,7 @@
 #include "types.h"
 #include "utils.h"
 
-namespace kvstore
+namespace eloqstore
 {
 const TableIdent &WriteTask::TableId() const
 {
@@ -327,7 +327,7 @@ void WriteTask::TriggerTTL()
 
 void WriteTask::TriggerFileGC(const PageMapper *mapper) const
 {
-    if (eloqstore->file_gc_ == nullptr)
+    if (eloq_store->file_gc_ == nullptr)
     {
         // File garbage collector is not enabled.
         return;
@@ -336,18 +336,18 @@ void WriteTask::TriggerFileGC(const PageMapper *mapper) const
     auto mapping = mapper->GetMappingSnapshot();
     uint64_t ts = utils::UnixTs<chrono::microseconds>();
     FileId cur_file_id = mapper->FilePgAllocator()->CurrentFileId();
-    eloqstore->file_gc_->AddTask(std::move(mapping), ts, cur_file_id);
+    eloq_store->file_gc_->AddTask(std::move(mapping), ts, cur_file_id);
 }
 
 std::pair<DataPage, KvError> WriteTask::LoadDataPage(PageId page_id)
 {
-    return ::kvstore::LoadDataPage(tbl_ident_, page_id, ToFilePage(page_id));
+    return ::eloqstore::LoadDataPage(tbl_ident_, page_id, ToFilePage(page_id));
 }
 
 std::pair<OverflowPage, KvError> WriteTask::LoadOverflowPage(PageId page_id)
 {
-    return ::kvstore::LoadOverflowPage(
+    return ::eloqstore::LoadOverflowPage(
         tbl_ident_, page_id, ToFilePage(page_id));
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

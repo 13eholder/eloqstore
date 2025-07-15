@@ -5,7 +5,7 @@
 
 #include "eloq_store.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 class ArchiveCrond
@@ -28,4 +28,4 @@ private:
     std::condition_variable cond_var_;
     bool stopped_{true};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

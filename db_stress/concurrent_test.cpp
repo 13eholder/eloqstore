@@ -19,7 +19,7 @@ DEFINE_uint32(kill_odds, 0, "odds (1/this) of each killpoint to crash");
 DEFINE_int32(seg_size, 16, "size of each segment");
 DEFINE_int32(val_size, 200, "length of each value");
 
-void RunClientThreads(kvstore::EloqStore &store, uint16_t n_thds)
+void RunClientThreads(eloqstore::EloqStore &store, uint16_t n_thds)
 {
     std::vector<std::thread> threads;
     threads.reserve(n_thds);
@@ -52,9 +52,9 @@ int main(int argc, char **argv)
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    kvstore::KillPoint::GetInstance().kill_odds_ = FLAGS_kill_odds;
+    eloqstore::KillPoint::GetInstance().kill_odds_ = FLAGS_kill_odds;
 
-    kvstore::KvOptions options;
+    eloqstore::KvOptions options;
     if (!FLAGS_options.empty())
     {
         if (!std::filesystem::exists(FLAGS_options))
@@ -68,7 +68,7 @@ int main(int argc, char **argv)
             return -1;
         }
     }
-    kvstore::EloqStore store(options);
+    eloqstore::EloqStore store(options);
     store.Start();
     if (FLAGS_num_client_threads == 1)
     {

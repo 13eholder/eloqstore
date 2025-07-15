@@ -10,7 +10,7 @@
 #include "coding.h"
 #include "kv_options.h"
 
-namespace kvstore
+namespace eloqstore
 {
 DataPage::DataPage(PageId page_id) : page_id_(page_id)
 {
@@ -588,4 +588,4 @@ std::string_view OverflowPage::GetEncodedPointers(
     return {ptr, n * sizeof(uint32_t)};
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

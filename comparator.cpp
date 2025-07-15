@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace kvstore
+namespace eloqstore
 {
 class BytewiseComparatorImpl : public Comparator
 {
@@ -123,4 +123,4 @@ std::string_view Comparator::PositiveInf()
     return {pos_str.data(), UINT64_MAX};
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

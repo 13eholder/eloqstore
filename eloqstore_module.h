@@ -6,7 +6,7 @@
 
 #include "shard.h"
 
-namespace kvstore
+namespace eloqstore
 {
 #ifdef ELOQ_MODULE_ENABLED
 class EloqStoreModule : public eloq::EloqModule
@@ -28,4 +28,4 @@ public:
 };
 #endif
 
-}  // namespace kvstore
+}  // namespace eloqstore

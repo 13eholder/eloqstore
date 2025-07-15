@@ -12,7 +12,7 @@
 #undef BLOCK_SIZE
 #include "concurrentqueue/blockingconcurrentqueue.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class MappingSnapshot;
 
@@ -53,4 +53,4 @@ private:
     std::vector<std::thread> workers_;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

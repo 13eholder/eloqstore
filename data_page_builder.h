@@ -8,7 +8,7 @@
 #include "kv_options.h"
 #include "page.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 class DataPageBuilder
@@ -93,4 +93,4 @@ private:
     std::vector<uint16_t> region_offsets_;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -1,6 +1,6 @@
 #include "kill_point.h"
 
-namespace kvstore
+namespace eloqstore
 {
 KillPoint &KillPoint::GetInstance()
 {
@@ -29,4 +29,4 @@ void KillPoint::TestKillRandom(std::string kill_point,
         exit(100);
     }
 }
-}  // namespace kvstore
+}  // namespace eloqstore

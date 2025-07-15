@@ -7,7 +7,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class MappingSnapshot;
 
@@ -44,4 +44,4 @@ public:
         return TaskType::Scan;
     }
 };
-}  // namespace kvstore
+}  // namespace eloqstore

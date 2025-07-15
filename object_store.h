@@ -10,7 +10,7 @@
 #undef BLOCK_SIZE
 #include "concurrentqueue/blockingconcurrentqueue.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class KvTask;
 class CloudStoreMgr;
@@ -95,4 +95,4 @@ private:
     const KvOptions *options_;
     std::vector<std::thread> workers_;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

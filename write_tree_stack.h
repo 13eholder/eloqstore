@@ -5,7 +5,7 @@
 #include "kv_options.h"
 #include "mem_index_page.h"
 
-namespace kvstore
+namespace eloqstore
 {
 struct IndexOp
 {
@@ -30,4 +30,4 @@ public:
     std::vector<IndexOp> changes_{};
     bool is_leaf_index_{false};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

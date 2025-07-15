@@ -5,26 +5,26 @@
 #include <cstdlib>
 #include <filesystem>
 
-kvstore::EloqStore *InitStore(const kvstore::KvOptions &opts)
+eloqstore::EloqStore *InitStore(const eloqstore::KvOptions &opts)
 {
-    static std::unique_ptr<kvstore::EloqStore> eloqstore = nullptr;
+    static std::unique_ptr<eloqstore::EloqStore> eloq_store = nullptr;
 
-    if (eloqstore)
+    if (eloq_store)
     {
-        const kvstore::KvOptions &old_opts = eloqstore->Options();
+        const eloqstore::KvOptions &old_opts = eloq_store->Options();
         if (old_opts == opts)
         {
             // Fast path: reuse the existing store
-            if (eloqstore->IsStopped())
+            if (eloq_store->IsStopped())
             {
-                kvstore::KvError err = eloqstore->Start();
-                CHECK(err == kvstore::KvError::NoError);
+                eloqstore::KvError err = eloq_store->Start();
+                CHECK(err == eloqstore::KvError::NoError);
             }
-            return eloqstore.get();
+            return eloq_store.get();
         }
         // Required options not equal to the options of the existing store, so
         // we need to stop and remove it.
-        eloqstore->Stop();
+        eloq_store->Stop();
         for (const std::string &db_path : old_opts.store_path)
         {
             std::filesystem::remove_all(db_path);
@@ -48,8 +48,8 @@ kvstore::EloqStore *InitStore(const kvstore::KvOptions &opts)
         int res = system(command.c_str());
     }
 
-    eloqstore = std::make_unique<kvstore::EloqStore>(opts);
-    kvstore::KvError err = eloqstore->Start();
-    CHECK(err == kvstore::KvError::NoError);
-    return eloqstore.get();
+    eloq_store = std::make_unique<eloqstore::EloqStore>(opts);
+    eloqstore::KvError err = eloq_store->Start();
+    CHECK(err == eloqstore::KvError::NoError);
+    return eloq_store.get();
 }

@@ -2,7 +2,7 @@
 
 #include "file_gc.h"
 #include "shard.h"
-namespace kvstore
+namespace eloqstore
 {
 KvError CompactTask::CompactDataFile()
 {
@@ -149,4 +149,4 @@ KvError CompactTask::CompactDataFile()
     return KvError::NoError;
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

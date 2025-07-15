@@ -36,22 +36,22 @@ std::string Value(uint64_t val, uint32_t len)
 
 void EncodeKey(char *dst, uint32_t key)
 {
-    kvstore::EncodeFixed32(dst, kvstore::ToBigEndian(key));
+    eloqstore::EncodeFixed32(dst, eloqstore::ToBigEndian(key));
 }
 
 void EncodeKey(std::string *dst, uint32_t key)
 {
-    kvstore::PutFixed32(dst, kvstore::ToBigEndian(key));
+    eloqstore::PutFixed32(dst, eloqstore::ToBigEndian(key));
 }
 
 uint32_t DecodeKey(const std::string &key)
 {
-    return __builtin_bswap32(kvstore::DecodeFixed32(key.data()));
+    return __builtin_bswap32(eloqstore::DecodeFixed32(key.data()));
 }
 
 void EncodeValue(std::string *dst, uint32_t val)
 {
-    kvstore::PutFixed32(dst, val);
+    eloqstore::PutFixed32(dst, val);
     assert(dst->size() == sizeof(uint32_t));
     if (val > dst->size())
     {
@@ -61,12 +61,12 @@ void EncodeValue(std::string *dst, uint32_t val)
 
 uint32_t DecodeValue(const std::string &val)
 {
-    uint32_t v = kvstore::DecodeFixed32(val.data());
+    uint32_t v = eloqstore::DecodeFixed32(val.data());
     CHECK(v == val.size() || v < sizeof(uint32_t));
     return v;
 }
 
-std::string FormatEntries(std::span<kvstore::KvEntry> entries)
+std::string FormatEntries(std::span<eloqstore::KvEntry> entries)
 {
     std::string kvs_str;
     for (auto &[k, v, ts, exp] : entries)
@@ -82,10 +82,11 @@ std::string FormatEntries(std::span<kvstore::KvEntry> entries)
     return kvs_str;
 }
 
-std::pair<std::string, kvstore::KvError> Scan(kvstore::EloqStore *store,
-                                              const kvstore::TableIdent &tbl_id,
-                                              uint32_t begin,
-                                              uint32_t end)
+std::pair<std::string, eloqstore::KvError> Scan(
+    eloqstore::EloqStore *store,
+    const eloqstore::TableIdent &tbl_id,
+    uint32_t begin,
+    uint32_t end)
 {
     char begin_buf[sizeof(uint32_t)];
     char end_buf[sizeof(uint32_t)];
@@ -93,18 +94,19 @@ std::pair<std::string, kvstore::KvError> Scan(kvstore::EloqStore *store,
     EncodeKey(end_buf, end);
     std::string_view begin_key(begin_buf, sizeof(uint32_t));
     std::string_view end_key(end_buf, sizeof(uint32_t));
-    kvstore::ScanRequest req;
+    eloqstore::ScanRequest req;
     req.SetArgs(tbl_id, begin_key, end_key);
     store->ExecSync(&req);
-    if (req.Error() != kvstore::KvError::NoError)
+    if (req.Error() != eloqstore::KvError::NoError)
     {
         return {{}, req.Error()};
     }
-    return {test_util::FormatEntries(req.Entries()), kvstore::KvError::NoError};
+    return {test_util::FormatEntries(req.Entries()),
+            eloqstore::KvError::NoError};
 }
 
-MapVerifier::MapVerifier(kvstore::TableIdent tid,
-                         kvstore::EloqStore *store,
+MapVerifier::MapVerifier(eloqstore::TableIdent tid,
+                         eloqstore::EloqStore *store,
                          bool validate,
                          uint16_t key_len)
     : tid_(std::move(tid)),
@@ -132,8 +134,8 @@ void MapVerifier::Upsert(uint64_t begin, uint64_t end)
     LOG(INFO) << "Upsert(" << begin << ',' << end << ')';
 
     const uint64_t now_ts = utils::UnixTs<chrono::milliseconds>();
-    const kvstore::WriteOp upsert = kvstore::WriteOp::Upsert;
-    std::vector<kvstore::WriteDataEntry> entries;
+    const eloqstore::WriteOp upsert = eloqstore::WriteOp::Upsert;
+    std::vector<eloqstore::WriteDataEntry> entries;
     for (size_t idx = begin; idx < end; ++idx)
     {
         std::string key = Key(idx, key_len_);
@@ -141,7 +143,7 @@ void MapVerifier::Upsert(uint64_t begin, uint64_t end)
         uint64_t expire_ts = max_ttl_ == 0 ? 0 : now_ts + max_ttl_;
         entries.emplace_back(key, val, ts_, upsert, expire_ts);
     }
-    kvstore::BatchWriteRequest req;
+    eloqstore::BatchWriteRequest req;
     req.SetArgs(tid_, std::move(entries));
     ExecWrite(&req);
 }
@@ -150,13 +152,13 @@ void MapVerifier::Delete(uint64_t begin, uint64_t end)
 {
     LOG(INFO) << "Delete(" << begin << ',' << end << ')';
 
-    std::vector<kvstore::WriteDataEntry> entries;
+    std::vector<eloqstore::WriteDataEntry> entries;
     for (size_t idx = begin; idx < end; ++idx)
     {
         std::string key = Key(idx, key_len_);
-        entries.emplace_back(key, "", ts_, kvstore::WriteOp::Delete);
+        entries.emplace_back(key, "", ts_, eloqstore::WriteOp::Delete);
     }
-    kvstore::BatchWriteRequest req;
+    eloqstore::BatchWriteRequest req;
     req.SetArgs(tid_, std::move(entries));
     ExecWrite(&req);
 }
@@ -165,7 +167,7 @@ void MapVerifier::Truncate(uint64_t position)
 {
     LOG(INFO) << "Truncate(" << position << ')';
 
-    kvstore::TruncateRequest req;
+    eloqstore::TruncateRequest req;
     std::string key = Key(position, key_len_);
     req.SetArgs(tid_, key);
     ExecWrite(&req);
@@ -183,7 +185,7 @@ void MapVerifier::WriteRnd(uint64_t begin,
               << int(density) << ')';
 
     const uint64_t now_ts = utils::UnixTs<chrono::milliseconds>();
-    std::vector<kvstore::WriteDataEntry> entries;
+    std::vector<eloqstore::WriteDataEntry> entries;
     for (size_t idx = begin; idx < end; ++idx)
     {
         if ((std::rand() % max) >= density)
@@ -196,7 +198,7 @@ void MapVerifier::WriteRnd(uint64_t begin,
         if ((std::rand() % max) < del)
         {
             entries.emplace_back(
-                std::move(key), std::string(), ts, kvstore::WriteOp::Delete);
+                std::move(key), std::string(), ts, eloqstore::WriteOp::Delete);
         }
         else
         {
@@ -210,11 +212,11 @@ void MapVerifier::WriteRnd(uint64_t begin,
             entries.emplace_back(std::move(key),
                                  std::move(val),
                                  ts,
-                                 kvstore::WriteOp::Upsert,
+                                 eloqstore::WriteOp::Upsert,
                                  expire_ts);
         }
     }
-    kvstore::BatchWriteRequest req;
+    eloqstore::BatchWriteRequest req;
     req.SetArgs(tid_, std::move(entries));
     ExecWrite(&req);
 }
@@ -223,7 +225,7 @@ void MapVerifier::Clean()
 {
     LOG(INFO) << "Clean()";
 
-    kvstore::TruncateRequest req;
+    eloqstore::TruncateRequest req;
     req.SetArgs(tid_, {});
     ExecWrite(&req);
 }
@@ -237,18 +239,18 @@ void MapVerifier::Read(std::string_view key)
 {
     DLOG(INFO) << "Read(" << key << ')';
 
-    kvstore::ReadRequest req;
+    eloqstore::ReadRequest req;
     req.SetArgs(tid_, key);
     eloq_store_->ExecSync(&req);
     std::string str_key(key);
-    if (req.Error() == kvstore::KvError::NoError)
+    if (req.Error() == eloqstore::KvError::NoError)
     {
-        kvstore::KvEntry ret(str_key, req.value_, req.ts_, req.expire_ts_);
+        eloqstore::KvEntry ret(str_key, req.value_, req.ts_, req.expire_ts_);
         CHECK(answer_.at(str_key) == ret);
     }
     else
     {
-        CHECK(req.Error() == kvstore::KvError::NotFound);
+        CHECK(req.Error() == eloqstore::KvError::NotFound);
         auto it = answer_.find(str_key);
         if (it != answer_.end())
         {
@@ -268,28 +270,28 @@ void MapVerifier::Floor(std::string_view key)
 {
     LOG(INFO) << "Floor(" << key << ')';
 
-    kvstore::FloorRequest req;
+    eloqstore::FloorRequest req;
     req.SetArgs(tid_, key);
     eloq_store_->ExecSync(&req);
     auto it_lb = answer_.upper_bound(std::string(key));
     if (it_lb != answer_.begin())
     {
         it_lb--;
-        if (req.Error() == kvstore::KvError::NotFound)
+        if (req.Error() == eloqstore::KvError::NotFound)
         {
             const uint64_t now_ts = utils::UnixTs<chrono::milliseconds>();
             CHECK(it_lb->second.expire_ts_ < now_ts);
             answer_.erase(it_lb);
             return;
         }
-        CHECK(req.Error() == kvstore::KvError::NoError);
-        kvstore::KvEntry ret(
+        CHECK(req.Error() == eloqstore::KvError::NoError);
+        eloqstore::KvEntry ret(
             req.floor_key_, req.value_, req.ts_, req.expire_ts_);
         CHECK(it_lb->second == ret);
     }
     else
     {
-        CHECK(req.Error() == kvstore::KvError::NotFound);
+        CHECK(req.Error() == eloqstore::KvError::NotFound);
     }
 }
 
@@ -308,7 +310,7 @@ void MapVerifier::Scan(std::string_view begin,
 {
     DLOG(INFO) << "Scan(" << begin << ',' << end << ')';
 
-    kvstore::ScanRequest req;
+    eloqstore::ScanRequest req;
     req.SetPagination(page_entries, page_size);
 
     std::string begin_key(begin);
@@ -332,9 +334,9 @@ void MapVerifier::Scan(std::string_view begin,
     while (true)
     {
         eloq_store_->ExecSync(&req);
-        if (req.Error() != kvstore::KvError::NoError)
+        if (req.Error() != eloqstore::KvError::NoError)
         {
-            CHECK(req.Error() == kvstore::KvError::NotFound);
+            CHECK(req.Error() == eloqstore::KvError::NotFound);
             CHECK(answer_.empty());
             break;
         }
@@ -367,19 +369,19 @@ void MapVerifier::Validate()
     Scan({}, Key(UINT64_MAX, 20), 1000);
 }
 
-void MapVerifier::ExecWrite(kvstore::KvRequest *req)
+void MapVerifier::ExecWrite(eloqstore::KvRequest *req)
 {
     switch (req->Type())
     {
-    case kvstore::RequestType::BatchWrite:
+    case eloqstore::RequestType::BatchWrite:
     {
-        const auto wreq = static_cast<kvstore::BatchWriteRequest *>(req);
-        for (const kvstore::WriteDataEntry &ent : wreq->batch_)
+        const auto wreq = static_cast<eloqstore::BatchWriteRequest *>(req);
+        for (const eloqstore::WriteDataEntry &ent : wreq->batch_)
         {
             auto it = answer_.find(ent.key_);
             if (it == answer_.end())
             {
-                if (ent.op_ == kvstore::WriteOp::Delete)
+                if (ent.op_ == eloqstore::WriteOp::Delete)
                 {
                     continue;
                 }
@@ -396,12 +398,12 @@ void MapVerifier::ExecWrite(kvstore::KvRequest *req)
             }
             assert(it != answer_.end());
 
-            if (ent.op_ == kvstore::WriteOp::Upsert)
+            if (ent.op_ == eloqstore::WriteOp::Upsert)
             {
-                it->second = kvstore::KvEntry(
+                it->second = eloqstore::KvEntry(
                     ent.key_, ent.val_, ent.timestamp_, ent.expire_ts_);
             }
-            else if (ent.op_ == kvstore::WriteOp::Delete)
+            else if (ent.op_ == eloqstore::WriteOp::Delete)
             {
                 answer_.erase(it);
             }
@@ -412,9 +414,9 @@ void MapVerifier::ExecWrite(kvstore::KvRequest *req)
         }
         break;
     }
-    case kvstore::RequestType::Truncate:
+    case eloqstore::RequestType::Truncate:
     {
-        const auto treq = static_cast<kvstore::TruncateRequest *>(req);
+        const auto treq = static_cast<eloqstore::TruncateRequest *>(req);
         auto it = answer_.lower_bound(std::string(treq->position_));
         answer_.erase(it, answer_.end());
         break;
@@ -424,7 +426,7 @@ void MapVerifier::ExecWrite(kvstore::KvRequest *req)
     }
 
     eloq_store_->ExecSync(req);
-    CHECK(req->Error() == kvstore::KvError::NoError);
+    CHECK(req->Error() == eloqstore::KvError::NoError);
 
     if (auto_validate_)
     {
@@ -443,7 +445,7 @@ void MapVerifier::SetValueSize(uint32_t val_size)
     val_size_ = val_size;
 }
 
-void MapVerifier::SetStore(kvstore::EloqStore *store)
+void MapVerifier::SetStore(eloqstore::EloqStore *store)
 {
     eloq_store_ = store;
 }
@@ -458,7 +460,7 @@ void MapVerifier::SetMaxTTL(uint32_t max_ttl)
     max_ttl_ = max_ttl;
 }
 
-const std::map<std::string, kvstore::KvEntry> &MapVerifier::DataSet() const
+const std::map<std::string, eloqstore::KvEntry> &MapVerifier::DataSet() const
 {
     return answer_;
 }
@@ -475,12 +477,12 @@ uint32_t ConcurrencyTester::Partition::FinishedRounds() const
 
 void ConcurrencyTester::Partition::FinishWrite()
 {
-    CHECK(req_.Error() == kvstore::KvError::NoError);
+    CHECK(req_.Error() == eloqstore::KvError::NoError);
     verify_cnt_ = 0;
     ticks_++;
 }
 
-ConcurrencyTester::ConcurrencyTester(kvstore::EloqStore *store,
+ConcurrencyTester::ConcurrencyTester(eloqstore::EloqStore *store,
                                      std::string tbl_name,
                                      uint32_t n_partitions,
                                      uint16_t seg_count,
@@ -502,7 +504,7 @@ ConcurrencyTester::ConcurrencyTester(kvstore::EloqStore *store,
     }
 }
 
-void ConcurrencyTester::Wake(kvstore::KvRequest *req)
+void ConcurrencyTester::Wake(eloqstore::KvRequest *req)
 {
     bool ok = finished_reqs_.enqueue(req->UserData());
     CHECK(ok);
@@ -521,9 +523,10 @@ void ConcurrencyTester::ExecRead(Reader *reader)
     std::string_view end_key(reader->end_key_, sizeof(uint32_t));
     reader->req_.SetArgs({tbl_name_, partition.id_}, begin_key, end_key);
     uint64_t user_data = reader->id_;
-    bool ok = store_->ExecAsyn(&reader->req_,
-                               user_data,
-                               [this](kvstore::KvRequest *req) { Wake(req); });
+    bool ok =
+        store_->ExecAsyn(&reader->req_,
+                         user_data,
+                         [this](eloqstore::KvRequest *req) { Wake(req); });
     CHECK(ok);
 }
 
@@ -534,7 +537,7 @@ void ConcurrencyTester::VerifyRead(Reader *reader, uint32_t write_pause)
         LOG(WARNING) << "read error " << reader->req_.ErrMessage();
         return;
     }
-    CHECK(reader->req_.Error() == kvstore::KvError::NoError);
+    CHECK(reader->req_.Error() == eloqstore::KvError::NoError);
     const uint32_t key_begin = reader->begin_;
     const uint32_t key_end = reader->end_;
     const uint16_t seg_id = key_begin / seg_size_;
@@ -594,7 +597,7 @@ void ConcurrencyTester::VerifyRead(Reader *reader, uint32_t write_pause)
 std::string ConcurrencyTester::DebugSegment(
     uint32_t partition_id,
     uint16_t seg_id,
-    std::span<kvstore::KvEntry> *resp) const
+    std::span<eloqstore::KvEntry> *resp) const
 {
     const Partition &partition = partitions_[partition_id];
     const uint32_t begin = seg_id * seg_size_;
@@ -627,9 +630,9 @@ std::string ConcurrencyTester::DebugSegment(
     }
 
     auto ret = Scan(store_, {tbl_name_, partition_id}, begin, end);
-    if (ret.second != kvstore::KvError::NoError)
+    if (ret.second != eloqstore::KvError::NoError)
     {
-        kvs_str.append(kvstore::ErrorString(ret.second));
+        kvs_str.append(eloqstore::ErrorString(ret.second));
     }
     else
     {
@@ -643,7 +646,7 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
     assert(!partition.IsWriting());
     partition.ticks_++;
     uint64_t ts = CurrentTimestamp();
-    std::vector<kvstore::WriteDataEntry> entries;
+    std::vector<eloqstore::WriteDataEntry> entries;
     const size_t total_size = partition.kvs_.size();
     uint32_t left = seg_sum_;
     uint32_t i = (std::rand() % seg_count_) * seg_size_;
@@ -667,19 +670,19 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
         {
             if (partition.kvs_[i] != 0)
             {
-                kvstore::WriteDataEntry &ent = entries.emplace_back();
+                eloqstore::WriteDataEntry &ent = entries.emplace_back();
                 EncodeKey(&ent.key_, i);
                 ent.timestamp_ = ts;
-                ent.op_ = kvstore::WriteOp::Delete;
+                ent.op_ = eloqstore::WriteOp::Delete;
             }
         }
         else
         {
-            kvstore::WriteDataEntry &ent = entries.emplace_back();
+            eloqstore::WriteDataEntry &ent = entries.emplace_back();
             EncodeKey(&ent.key_, i);
             EncodeValue(&ent.val_, new_val);
             ent.timestamp_ = ts;
-            ent.op_ = kvstore::WriteOp::Upsert;
+            ent.op_ = eloqstore::WriteOp::Upsert;
         }
         partition.kvs_[i] = new_val;
 
@@ -698,9 +701,10 @@ void ConcurrencyTester::ExecWrite(Partition &partition)
 void ConcurrencyTester::SendWrite(Partition &partition)
 {
     uint64_t user_data = (partition.id_ | (uint64_t(1) << 63));
-    bool ok = store_->ExecAsyn(&partition.req_,
-                               user_data,
-                               [this](kvstore::KvRequest *req) { Wake(req); });
+    bool ok =
+        store_->ExecAsyn(&partition.req_,
+                         user_data,
+                         [this](eloqstore::KvRequest *req) { Wake(req); });
     CHECK(ok);
 }
 
@@ -722,14 +726,14 @@ void ConcurrencyTester::Init()
     const uint32_t kvs_num = seg_size_ * seg_count_;
     for (Partition &partition : partitions_)
     {
-        kvstore::TableIdent tbl_id(tbl_name_, partition.id_);
+        eloqstore::TableIdent tbl_id(tbl_name_, partition.id_);
 
         // Try to load partition KVs from EloqStore
-        kvstore::ScanRequest scan_req;
+        eloqstore::ScanRequest scan_req;
         scan_req.SetArgs(tbl_id, {}, {});
         store_->ExecSync(&scan_req);
-        CHECK(scan_req.Error() == kvstore::KvError::NoError ||
-              scan_req.Error() == kvstore::KvError::NotFound);
+        CHECK(scan_req.Error() == eloqstore::KvError::NoError ||
+              scan_req.Error() == eloqstore::KvError::NotFound);
         if (!scan_req.Entries().empty())
         {
             partition.kvs_.resize(kvs_num, 0);
@@ -761,18 +765,18 @@ void ConcurrencyTester::Init()
 
         // Initialize partition KVs
         partition.kvs_.resize(kvs_num, val_size_);
-        std::vector<kvstore::WriteDataEntry> entries;
+        std::vector<eloqstore::WriteDataEntry> entries;
         for (uint32_t i = 0; i < kvs_num; i++)
         {
-            kvstore::WriteDataEntry &ent = entries.emplace_back();
+            eloqstore::WriteDataEntry &ent = entries.emplace_back();
             EncodeKey(&ent.key_, i);
             EncodeValue(&ent.val_, val_size_);
             ent.timestamp_ = ts;
-            ent.op_ = kvstore::WriteOp::Upsert;
+            ent.op_ = eloqstore::WriteOp::Upsert;
         }
         partition.req_.SetArgs(tbl_id, std::move(entries));
         store_->ExecSync(&partition.req_);
-        CHECK(partition.req_.Error() == kvstore::KvError::NoError);
+        CHECK(partition.req_.Error() == eloqstore::KvError::NoError);
     }
 }
 
@@ -835,10 +839,10 @@ void ConcurrencyTester::Clear()
 {
     for (Partition &part : partitions_)
     {
-        kvstore::TruncateRequest req;
+        eloqstore::TruncateRequest req;
         req.SetArgs({tbl_name_, part.id_}, {});
         store_->ExecSync(&req);
-        CHECK(req.Error() == kvstore::KvError::NoError);
+        CHECK(req.Error() == eloqstore::KvError::NoError);
     }
 }
 
@@ -847,7 +851,7 @@ uint64_t ConcurrencyTester::CurrentTimestamp()
     return utils::UnixTs<std::chrono::nanoseconds>();
 }
 
-ManifestVerifier::ManifestVerifier(kvstore::KvOptions opts)
+ManifestVerifier::ManifestVerifier(eloqstore::KvOptions opts)
     : options_(opts),
       io_mgr_(&options_),
       idx_mgr_(&io_mgr_),
@@ -855,12 +859,13 @@ ManifestVerifier::ManifestVerifier(kvstore::KvOptions opts)
 {
     if (!options_.data_append_mode)
     {
-        answer_file_pages_ =
-            static_cast<kvstore::PooledFilePages *>(answer_.FilePgAllocator());
+        answer_file_pages_ = static_cast<eloqstore::PooledFilePages *>(
+            answer_.FilePgAllocator());
     }
 }
 
-std::pair<kvstore::PageId, kvstore::FilePageId> ManifestVerifier::RandChoose()
+std::pair<eloqstore::PageId, eloqstore::FilePageId>
+ManifestVerifier::RandChoose()
 {
     CHECK(!helper_.empty());
     auto it = std::next(helper_.begin(), std::rand() % helper_.size());
@@ -874,8 +879,8 @@ uint32_t ManifestVerifier::Size() const
 
 void ManifestVerifier::NewMapping()
 {
-    kvstore::PageId page_id = answer_.GetPage();
-    kvstore::FilePageId file_page_id = answer_.FilePgAllocator()->Allocate();
+    eloqstore::PageId page_id = answer_.GetPage();
+    eloqstore::FilePageId file_page_id = answer_.FilePgAllocator()->Allocate();
     answer_.UpdateMapping(page_id, file_page_id);
     builder_.UpdateMapping(page_id, file_page_id);
     helper_[page_id] = file_page_id;
@@ -886,7 +891,7 @@ void ManifestVerifier::UpdateMapping()
     auto [page_id, old_fp_id] = RandChoose();
     root_id_ = page_id;
 
-    kvstore::FilePageId new_fp_id = answer_.FilePgAllocator()->Allocate();
+    eloqstore::FilePageId new_fp_id = answer_.FilePgAllocator()->Allocate();
     answer_.UpdateMapping(page_id, new_fp_id);
     builder_.UpdateMapping(page_id, new_fp_id);
     if (answer_file_pages_)
@@ -902,7 +907,7 @@ void ManifestVerifier::FreeMapping()
     helper_.erase(page_id);
     if (page_id == root_id_)
     {
-        root_id_ = Size() == 0 ? kvstore::MaxPageId : RandChoose().first;
+        root_id_ = Size() == 0 ? eloqstore::MaxPageId : RandChoose().first;
     }
 
     answer_.FreePage(page_id);
@@ -924,7 +929,7 @@ void ManifestVerifier::Finish()
         else
         {
             std::string_view sv =
-                builder_.Finalize(root_id_, kvstore::MaxPageId);
+                builder_.Finalize(root_id_, eloqstore::MaxPageId);
             file_.append(sv);
             builder_.Reset();
         }
@@ -933,19 +938,20 @@ void ManifestVerifier::Finish()
 
 void ManifestVerifier::Snapshot()
 {
-    kvstore::FilePageId max_fp_id = answer_.FilePgAllocator()->MaxFilePageId();
+    eloqstore::FilePageId max_fp_id =
+        answer_.FilePgAllocator()->MaxFilePageId();
     std::string_view sv = builder_.Snapshot(
-        root_id_, kvstore::MaxPageId, answer_.GetMapping(), max_fp_id);
+        root_id_, eloqstore::MaxPageId, answer_.GetMapping(), max_fp_id);
     file_ = sv;
     builder_.Reset();
 }
 
 void ManifestVerifier::Verify()
 {
-    kvstore::MemStoreMgr::Manifest file(file_);
-    kvstore::Replayer replayer(&options_);
-    kvstore::KvError err = replayer.Replay(&file);
-    CHECK(err == kvstore::KvError::NoError);
+    eloqstore::MemStoreMgr::Manifest file(file_);
+    eloqstore::Replayer replayer(&options_);
+    eloqstore::KvError err = replayer.Replay(&file);
+    CHECK(err == eloqstore::KvError::NoError);
     CHECK(replayer.root_ == root_id_);
     auto mapper = replayer.GetMapper(&idx_mgr_, &tbl_id_);
 
@@ -958,20 +964,20 @@ void ManifestVerifier::Verify()
     {
         if (*it_answer != *it_recovered)
         {
-            CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_answer));
-            CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_recovered));
+            CHECK(!eloqstore::MappingSnapshot::IsFilePageId(*it_answer));
+            CHECK(!eloqstore::MappingSnapshot::IsFilePageId(*it_recovered));
         }
         it_answer++;
         it_recovered++;
     }
     while (it_answer != answer_map.end())
     {
-        CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_answer));
+        CHECK(!eloqstore::MappingSnapshot::IsFilePageId(*it_answer));
         it_answer++;
     }
     while (it_recovered != recovered_map.end())
     {
-        CHECK(!kvstore::MappingSnapshot::IsFilePageId(*it_recovered));
+        CHECK(!eloqstore::MappingSnapshot::IsFilePageId(*it_recovered));
         it_recovered++;
     }
 }

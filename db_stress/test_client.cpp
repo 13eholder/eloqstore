@@ -13,28 +13,28 @@ int main(int argc, char **argv)
 {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    auto tbl_id = kvstore::TableIdent::FromString(FLAGS_partition);
+    auto tbl_id = eloqstore::TableIdent::FromString(FLAGS_partition);
     if (!tbl_id.IsValid())
     {
         std::cerr << "Invalid argument: " << FLAGS_partition << std::endl;
         exit(-1);
     }
 
-    kvstore::KvOptions options;
+    eloqstore::KvOptions options;
     options.store_path = {FLAGS_db_path};
-    kvstore::EloqStore store(options);
-    kvstore::KvError err = store.Start();
-    if (err != kvstore::KvError::NoError)
+    eloqstore::EloqStore store(options);
+    eloqstore::KvError err = store.Start();
+    if (err != eloqstore::KvError::NoError)
     {
-        std::cerr << kvstore::ErrorString(err) << std::endl;
+        std::cerr << eloqstore::ErrorString(err) << std::endl;
         exit(-1);
     }
 
     auto [kvs, e] =
         test_util::Scan(&store, tbl_id, FLAGS_scan_begin, FLAGS_scan_end);
-    if (e != kvstore::KvError::NoError)
+    if (e != eloqstore::KvError::NoError)
     {
-        std::cerr << kvstore::ErrorString(e) << std::endl;
+        std::cerr << eloqstore::ErrorString(e) << std::endl;
         exit(-1);
     }
     std::cout << kvs << std::endl;

@@ -9,7 +9,7 @@
 #include "page.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 enum class ValLenBit : uint8_t
 {
@@ -195,4 +195,4 @@ private:
     PageId page_id_{MaxPageId};
     Page page_{false};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

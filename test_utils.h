@@ -22,18 +22,19 @@ uint32_t DecodeKey(const std::string &key);
 void EncodeValue(std::string *dst, uint32_t val);
 uint32_t DecodeValue(const std::string &val);
 
-std::string FormatEntries(std::span<kvstore::KvEntry> entries);
+std::string FormatEntries(std::span<eloqstore::KvEntry> entries);
 
-std::pair<std::string, kvstore::KvError> Scan(kvstore::EloqStore *store,
-                                              const kvstore::TableIdent &tbl_id,
-                                              uint32_t begin,
-                                              uint32_t end);
+std::pair<std::string, eloqstore::KvError> Scan(
+    eloqstore::EloqStore *store,
+    const eloqstore::TableIdent &tbl_id,
+    uint32_t begin,
+    uint32_t end);
 
 class MapVerifier
 {
 public:
-    MapVerifier(kvstore::TableIdent tid,
-                kvstore::EloqStore *store,
+    MapVerifier(eloqstore::TableIdent tid,
+                eloqstore::EloqStore *store,
                 bool validate = true,
                 uint16_t key_len = 7);
     ~MapVerifier();
@@ -46,7 +47,7 @@ public:
                   uint8_t del = 20,
                   uint8_t density = 25);
     void Clean();
-    void ExecWrite(kvstore::KvRequest *req);
+    void ExecWrite(eloqstore::KvRequest *req);
 
     void Read(uint64_t key);
     void Read(std::string_view key);
@@ -64,28 +65,28 @@ public:
     void Validate();
     void SetAutoValidate(bool v);
     void SetValueSize(uint32_t val_size);
-    void SetStore(kvstore::EloqStore *store);
+    void SetStore(eloqstore::EloqStore *store);
     void SetTimestamp(uint64_t ts);
     void SetMaxTTL(uint32_t max_ttl);
 
-    const std::map<std::string, kvstore::KvEntry> &DataSet() const;
+    const std::map<std::string, eloqstore::KvEntry> &DataSet() const;
 
 private:
-    const kvstore::TableIdent tid_;
+    const eloqstore::TableIdent tid_;
     uint64_t ts_{0};
-    std::map<std::string, kvstore::KvEntry> answer_;
+    std::map<std::string, eloqstore::KvEntry> answer_;
     bool auto_validate_{true};
     const uint16_t key_len_;
     uint32_t val_size_{12};
     uint32_t max_ttl_{0};  // Max TTL in milliseconds
 
-    kvstore::EloqStore *eloq_store_;
+    eloqstore::EloqStore *eloq_store_;
 };
 
 class ConcurrencyTester
 {
 public:
-    ConcurrencyTester(kvstore::EloqStore *store,
+    ConcurrencyTester(eloqstore::EloqStore *store,
                       std::string tbl_name,
                       uint32_t n_partitions,
                       uint16_t seg_count,
@@ -108,7 +109,7 @@ private:
         uint32_t end_;
         char begin_key_[4];
         char end_key_[4];
-        kvstore::ScanRequest req_;
+        eloqstore::ScanRequest req_;
         uint32_t verify_cnt_{0};
     };
 
@@ -121,11 +122,11 @@ private:
         uint32_t id_;
         std::vector<uint32_t> kvs_;
         uint32_t ticks_{0};
-        kvstore::BatchWriteRequest req_;
+        eloqstore::BatchWriteRequest req_;
         uint32_t verify_cnt_{0};
     };
 
-    void Wake(kvstore::KvRequest *req);
+    void Wake(eloqstore::KvRequest *req);
     void ExecRead(Reader *reader);
     void VerifyRead(Reader *reader, uint32_t write_pause);
     void SendWrite(Partition &partition);
@@ -134,7 +135,7 @@ private:
 
     std::string DebugSegment(uint32_t partition_id,
                              uint16_t seg_id,
-                             std::span<kvstore::KvEntry> *resp) const;
+                             std::span<eloqstore::KvEntry> *resp) const;
 
     const uint32_t val_size_;
     const uint8_t seg_size_;
@@ -146,13 +147,13 @@ private:
     moodycamel::BlockingConcurrentQueue<uint64_t> finished_reqs_;
     uint32_t verify_sum_{0};
     uint32_t verify_kv_{0};
-    kvstore::EloqStore *const store_;
+    eloqstore::EloqStore *const store_;
 };
 
 class ManifestVerifier
 {
 public:
-    ManifestVerifier(kvstore::KvOptions opts);
+    ManifestVerifier(eloqstore::KvOptions opts);
     void NewMapping();
     void UpdateMapping();
     void FreeMapping();
@@ -163,19 +164,19 @@ public:
     uint32_t Size() const;
 
 private:
-    std::pair<kvstore::PageId, kvstore::FilePageId> RandChoose();
+    std::pair<eloqstore::PageId, eloqstore::FilePageId> RandChoose();
 
-    kvstore::KvOptions options_;
-    kvstore::MemStoreMgr io_mgr_;
-    kvstore::IndexPageManager idx_mgr_;
-    kvstore::TableIdent tbl_id_;
+    eloqstore::KvOptions options_;
+    eloqstore::MemStoreMgr io_mgr_;
+    eloqstore::IndexPageManager idx_mgr_;
+    eloqstore::TableIdent tbl_id_;
 
     uint32_t root_id_;
-    kvstore::PageMapper answer_;
-    kvstore::PooledFilePages *answer_file_pages_{nullptr};
-    std::unordered_map<kvstore::PageId, kvstore::FilePageId> helper_;
+    eloqstore::PageMapper answer_;
+    eloqstore::PooledFilePages *answer_file_pages_{nullptr};
+    std::unordered_map<eloqstore::PageId, eloqstore::FilePageId> helper_;
 
-    kvstore::ManifestBuilder builder_;
+    eloqstore::ManifestBuilder builder_;
     std::string file_;
 };
 }  // namespace test_util

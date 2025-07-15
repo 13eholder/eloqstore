@@ -16,7 +16,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 IndexPageManager::IndexPageManager(AsyncIoManager *io_manager)
     : io_manager_(io_manager)
@@ -442,4 +442,4 @@ AsyncIoManager *IndexPageManager::IoMgr() const
 {
     return io_manager_;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

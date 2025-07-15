@@ -1,6 +1,6 @@
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 std::ostream &operator<<(std::ostream &out, const TableIdent &tid)
 {
@@ -72,4 +72,4 @@ bool WriteDataEntry::operator<(const WriteDataEntry &other) const
     // TODO: use comparator defined in KvOptions ?
     return key_ < other.key_;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -7,7 +7,7 @@
 
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class IndexPageManager;
 class MemIndexPage;
@@ -207,4 +207,4 @@ private:
     friend class Replayer;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

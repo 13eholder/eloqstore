@@ -2,7 +2,7 @@
 
 #include <bthread/eloq_module.h>
 
-namespace kvstore
+namespace eloqstore
 {
 Shard::Shard(const EloqStore *store, size_t shard_id, uint32_t fd_limit)
     : store_(store),
@@ -393,4 +393,4 @@ bool Shard::PendingWriteQueue::Empty() const
     return head_ == nullptr;
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

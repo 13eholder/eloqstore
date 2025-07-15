@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace kvstore
+namespace eloqstore
 {
 // Standard Put... routines append to a string
 void PutFixed16(std::string *dst, uint16_t value);
@@ -225,4 +225,4 @@ inline int64_t DecodeInt64Delta(uint64_t val)
 
     return signed_delta;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

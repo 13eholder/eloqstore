@@ -10,7 +10,7 @@ using namespace test_util;
 
 TEST_CASE("simple manifest recovery", "[manifest]")
 {
-    kvstore::KvOptions opts;
+    eloqstore::KvOptions opts;
     opts.init_page_count = 100;
     ManifestVerifier verifier(opts);
 
@@ -28,7 +28,7 @@ TEST_CASE("simple manifest recovery", "[manifest]")
 
 TEST_CASE("medium manifest recovery", "[manifest]")
 {
-    kvstore::KvOptions opts;
+    eloqstore::KvOptions opts;
     opts.init_page_count = 100;
     ManifestVerifier verifier(opts);
 
@@ -66,7 +66,7 @@ TEST_CASE("detect manifest corruption", "[manifest]")
 
 TEST_CASE("create archives", "[archive][slow]")
 {
-    kvstore::KvOptions options{
+    eloqstore::KvOptions options{
         .num_retained_archives = 1,
         .archive_interval_secs = 1,
         .file_amplify_factor = 2,
@@ -74,7 +74,7 @@ TEST_CASE("create archives", "[archive][slow]")
         .pages_per_file_shift = 8,
         .data_append_mode = true,
     };
-    kvstore::EloqStore *store = InitStore(options);
+    eloqstore::EloqStore *store = InitStore(options);
 
     MapVerifier tester(test_tbl_id, store, false);
     tester.SetValueSize(10000);

@@ -7,7 +7,7 @@
 
 #include "comparator.h"
 
-namespace kvstore
+namespace eloqstore
 {
 constexpr uint8_t max_overflow_pointers = 128;
 constexpr uint16_t max_read_pages_batch = max_overflow_pointers;
@@ -128,7 +128,7 @@ struct KvOptions
     /**
      * @brief Storage path on cloud service.
      * Store all data locally if this is empty.
-     * Example: eloq-s3:mybucket/kvstore
+     * Example: eloq-s3:mybucket/eloqstore
      */
     std::string cloud_store_path;
 
@@ -155,4 +155,4 @@ struct KvOptions
      */
     bool data_append_mode = false;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

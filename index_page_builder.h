@@ -9,7 +9,7 @@
 #include "kv_options.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class IndexPageBuilder
 {
@@ -52,4 +52,4 @@ private:
     int32_t last_page_id_{0};
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

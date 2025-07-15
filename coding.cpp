@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace kvstore
+namespace eloqstore
 {
 void PutFixed16(std::string *dst, uint16_t value)
 {
@@ -236,4 +236,4 @@ bool GetLengthPrefixedSlice(std::string_view *input, std::string_view *result)
         return false;
     }
 }
-}  // namespace kvstore
+}  // namespace eloqstore

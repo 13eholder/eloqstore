@@ -4,7 +4,7 @@
 #include "utils.h"
 #include "write_tree_stack.h"
 
-namespace kvstore
+namespace eloqstore
 {
 BatchWriteTask::BatchWriteTask()
     : idx_page_builder_(Options()), data_page_builder_(Options())
@@ -1612,4 +1612,4 @@ void BatchWriteTask::UpdateTTL(uint64_t expire_ts,
     }
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

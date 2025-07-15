@@ -21,7 +21,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class WriteReq;
 class WriteTask;
@@ -501,4 +501,4 @@ private:
     std::unordered_map<TableIdent, Partition> store_;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

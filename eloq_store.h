@@ -7,7 +7,7 @@
 #include "kv_options.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class Shard;
 
@@ -266,4 +266,4 @@ private:
     friend class IouringMgr;
     friend class WriteTask;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

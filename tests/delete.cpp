@@ -7,7 +7,7 @@ using namespace test_util;
 
 TEST_CASE("simple delete", "[delete]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.Upsert(100, 300);
     verify.Delete(150, 200);
@@ -20,7 +20,7 @@ TEST_CASE("simple delete", "[delete]")
 
 TEST_CASE("clean data", "[delete]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     constexpr uint64_t max_val = 1000;
     verify.Delete(0, 100);
@@ -35,7 +35,7 @@ TEST_CASE("clean data", "[delete]")
 
 TEST_CASE("decrease height", "[delete]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.Upsert(1, 1000);
     for (int i = 0; i < 1000; i += 50)
@@ -46,7 +46,7 @@ TEST_CASE("decrease height", "[delete]")
 
 TEST_CASE("random upsert/delete and scan", "[delete]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.SetValueSize(100);
     constexpr uint64_t max_val = 50000;
@@ -63,7 +63,7 @@ TEST_CASE("random upsert/delete and scan", "[delete]")
 
 TEST_CASE("easy truncate table partition", "[truncate]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.SetValueSize(1000);
 
@@ -74,7 +74,7 @@ TEST_CASE("easy truncate table partition", "[truncate]")
 
 TEST_CASE("truncate table partition", "[truncate]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store, false);
     verify.SetValueSize(100);
 
@@ -102,7 +102,7 @@ TEST_CASE("truncate table partition", "[truncate]")
 
 TEST_CASE("rand write with expire timestamp", "[TTL]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.SetValueSize(10000);
     verify.SetMaxTTL(4);
@@ -117,7 +117,7 @@ TEST_CASE("rand write with expire timestamp", "[TTL]")
 
 TEST_CASE("upsert with expire timestamp", "[TTL]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store, false);
     verify.SetValueSize(1000);
 
@@ -137,17 +137,17 @@ TEST_CASE("upsert with expire timestamp", "[TTL]")
     verify.Delete(0, 1);
 
     // All keys should have been expired and removed.
-    kvstore::ScanRequest req;
+    eloqstore::ScanRequest req;
     req.SetArgs(test_tbl_id, {}, {});
     store->ExecSync(&req);
-    CHECK(req.Error() == kvstore::KvError::NoError);
+    CHECK(req.Error() == eloqstore::KvError::NoError);
     CHECK(req.Entries().empty());
     CHECK(verify.DataSet().empty());
 }
 
 TEST_CASE("expire timestamp", "[TTL]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store);
     verify.SetMaxTTL(200);
 

@@ -13,7 +13,7 @@
 #include "kv_options.h"
 #include "root_meta.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 Replayer::Replayer(const KvOptions *opts) : opts_(opts)
@@ -208,4 +208,4 @@ std::unique_ptr<PageMapper> Replayer::GetMapper(IndexPageManager *idx_mgr,
 
     return std::move(mapper);
 }
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -11,7 +11,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class WriteTask : public KvTask
 {
@@ -79,4 +79,4 @@ protected:
     FilePageId batch_fp_id_{MaxFilePageId};
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

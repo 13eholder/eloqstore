@@ -15,7 +15,7 @@
 #include "task.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class IndexPageManager;
 class MappingSnapshot;
@@ -201,4 +201,4 @@ private:
     std::string key_;
     PageId page_id_{MaxPageId};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

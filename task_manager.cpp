@@ -8,7 +8,7 @@
 
 using namespace boost::context;
 
-namespace kvstore
+namespace eloqstore
 {
 BatchWriteTask *TaskManager::GetBatchWriteTask(const TableIdent &tbl_id)
 {
@@ -77,4 +77,4 @@ size_t TaskManager::NumActive() const
     return num_active_;
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

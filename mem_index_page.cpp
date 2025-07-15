@@ -12,7 +12,7 @@
 #include "kv_options.h"
 #include "page_mapper.h"
 
-namespace kvstore
+namespace eloqstore
 {
 uint16_t MemIndexPage::ContentLength() const
 {
@@ -411,4 +411,4 @@ void IndexPageIter::Advance(std::string_view &key, uint32_t &page_id)
         page_id = MaxPageId;
     }
 }
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -9,7 +9,7 @@
 #include "page_mapper.h"
 #include "task.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class ManifestBuilder
 {
@@ -72,4 +72,4 @@ struct RootMeta
     WaitingZone waiting_;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

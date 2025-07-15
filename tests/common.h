@@ -9,23 +9,23 @@
 #include "eloq_store.h"
 
 constexpr char test_path[] = "/tmp/eloqstore";
-static const kvstore::TableIdent test_tbl_id = {"t0", 0};
-const kvstore::KvOptions mem_store_opts = {};
-const kvstore::KvOptions default_opts = {
+static const eloqstore::TableIdent test_tbl_id = {"t0", 0};
+const eloqstore::KvOptions mem_store_opts = {};
+const eloqstore::KvOptions default_opts = {
     .store_path = {test_path},
 };
 
-kvstore::EloqStore *InitStore(const kvstore::KvOptions &opts);
+eloqstore::EloqStore *InitStore(const eloqstore::KvOptions &opts);
 
 inline std::string_view ConvertIntKey(char *ptr, uint64_t key)
 {
-    uint64_t big_endian = kvstore::ToBigEndian(key);
-    kvstore::EncodeFixed64(ptr, big_endian);
+    uint64_t big_endian = eloqstore::ToBigEndian(key);
+    eloqstore::EncodeFixed64(ptr, big_endian);
     return {ptr, sizeof(uint64_t)};
 }
 
 inline uint64_t ConvertIntKey(std::string_view key)
 {
-    uint64_t big_endian = kvstore::DecodeFixed64(key.data());
+    uint64_t big_endian = eloqstore::DecodeFixed64(key.data());
     return __builtin_bswap64(big_endian);
 }

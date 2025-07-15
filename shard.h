@@ -10,7 +10,7 @@
 #undef BLOCK_SIZE
 #include "concurrentqueue/blockingconcurrentqueue.h"
 
-namespace kvstore
+namespace eloqstore
 {
 #ifdef ELOQ_MODULE_ENABLED
 class EloqStoreModule;
@@ -125,4 +125,4 @@ private:
 
     friend class EloqStoreModule;
 };
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -9,7 +9,7 @@
 #include "error.h"
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 class KvRequest;
 class KvTask;
@@ -22,7 +22,7 @@ class MappingSnapshot;
 class Shard;
 class EloqStore;
 
-inline EloqStore *eloqstore;
+inline EloqStore *eloq_store;
 inline thread_local Shard *shard;
 KvTask *ThdTask();
 AsyncIoManager *IoMgr();
@@ -134,4 +134,4 @@ public:
 private:
     KvTask *task_{nullptr};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

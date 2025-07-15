@@ -5,7 +5,7 @@
 #include "write_task.h"
 #include "write_tree_stack.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 class BatchWriteTask : public WriteTask
@@ -157,4 +157,4 @@ private:
     static void AdvanceIndexPageIter(IndexPageIter &iter, bool &is_valid);
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

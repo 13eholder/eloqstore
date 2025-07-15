@@ -4,7 +4,7 @@
 
 #include "inih/cpp/INIReader.h"
 
-namespace kvstore
+namespace eloqstore
 {
 int KvOptions::LoadFromIni(const char *path)
 {
@@ -166,4 +166,4 @@ size_t KvOptions::DataFileSize() const
 {
     return data_page_size << pages_per_file_shift;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

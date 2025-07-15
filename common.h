@@ -2,7 +2,7 @@
 
 #include "types.h"
 
-namespace kvstore
+namespace eloqstore
 {
 constexpr uint32_t num_reserved_fd = 100;
 
@@ -38,4 +38,4 @@ inline std::string ArchiveName(uint64_t ts)
     name.append(std::to_string(ts));
     return std::move(name);
 }
-}  // namespace kvstore
+}  // namespace eloqstore

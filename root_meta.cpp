@@ -10,7 +10,7 @@
 #include "coding.h"
 #include "page_mapper.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 ManifestBuilder::ManifestBuilder()
@@ -84,4 +84,4 @@ void RootMeta::Unpin()
     ref_cnt_--;
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

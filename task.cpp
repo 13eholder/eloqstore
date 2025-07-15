@@ -5,7 +5,7 @@
 #include "index_page_manager.h"
 #include "shard.h"
 
-namespace kvstore
+namespace eloqstore
 {
 void KvTask::Yield()
 {
@@ -273,11 +273,11 @@ AsyncIoManager *IoMgr()
 
 const KvOptions *Options()
 {
-    return &eloqstore->Options();
+    return &eloq_store->Options();
 }
 
 const Comparator *Comp()
 {
     return Options()->comparator_;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

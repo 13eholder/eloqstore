@@ -1,6 +1,6 @@
 #include "eloqstore_module.h"
 
-namespace kvstore
+namespace eloqstore
 {
 #ifdef ELOQ_MODULE_ENABLED
 void EloqStoreModule::ExtThdStart(int thd_id)
@@ -30,4 +30,4 @@ bool EloqStoreModule::HasTask(int thd_id) const
 }
 #endif
 
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -9,7 +9,7 @@
 #include "common.h"
 #include "replayer.h"
 
-namespace kvstore
+namespace eloqstore
 {
 FileGarbageCollector::~FileGarbageCollector()
 {
@@ -220,4 +220,4 @@ bool FileGarbageCollector::GcTask::IsStopSignal() const
 {
     return mapping_ == nullptr;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

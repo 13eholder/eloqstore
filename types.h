@@ -10,7 +10,7 @@
 #include <span>
 #include <string>
 
-namespace kvstore
+namespace eloqstore
 {
 using PageId = uint32_t;
 constexpr PageId MaxPageId = UINT32_MAX;
@@ -96,12 +96,12 @@ struct WriteDataEntry
     uint64_t expire_ts_{0};  // 0 means never expire.
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore
 
 template <>
-struct std::hash<kvstore::TableIdent>
+struct std::hash<eloqstore::TableIdent>
 {
-    std::size_t operator()(const kvstore::TableIdent &tbl_ident) const
+    std::size_t operator()(const eloqstore::TableIdent &tbl_ident) const
     {
         size_t seed = 0;
         boost::hash_combine(seed, tbl_ident.tbl_name_);
@@ -111,11 +111,11 @@ struct std::hash<kvstore::TableIdent>
 };
 
 template <>
-struct std::hash<kvstore::FileKey>
+struct std::hash<eloqstore::FileKey>
 {
-    std::size_t operator()(const kvstore::FileKey &file_key) const
+    std::size_t operator()(const eloqstore::FileKey &file_key) const
     {
-        size_t seed = std::hash<kvstore::TableIdent>()(file_key.tbl_id_);
+        size_t seed = std::hash<eloqstore::TableIdent>()(file_key.tbl_id_);
         boost::hash_combine(seed, file_key.filename_);
         return seed;
     }

@@ -8,7 +8,7 @@
 #include "page_mapper.h"
 #include "shard.h"
 
-namespace kvstore
+namespace eloqstore
 {
 ScanIterator::ScanIterator(const TableIdent &tbl_id)
     : tbl_id_(tbl_id), iter_(nullptr, Options())
@@ -191,4 +191,4 @@ KvError ScanTask::Scan()
     }
     return KvError::NoError;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

@@ -30,7 +30,7 @@
 #include "task.h"
 #include "write_task.h"
 
-namespace kvstore
+namespace eloqstore
 {
 namespace fs = std::filesystem;
 
@@ -531,9 +531,9 @@ void IouringMgr::EncodeUserData(io_uring_sqe *sqe,
 
 IouringMgr::FdIdx IouringMgr::GetRootFD(const TableIdent &tbl_id)
 {
-    assert(!eloqstore->root_fds_.empty());
-    const uint16_t n_disks = eloqstore->root_fds_.size();
-    int root_fd = eloqstore->root_fds_[tbl_id.DiskIndex(n_disks)];
+    assert(!eloq_store->root_fds_.empty());
+    const uint16_t n_disks = eloq_store->root_fds_.size();
+    int root_fd = eloq_store->root_fds_[tbl_id.DiskIndex(n_disks)];
     return {root_fd, false};
 }
 
@@ -2230,4 +2230,4 @@ void MemStoreMgr::Manifest::Skip(size_t n)
     }
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore

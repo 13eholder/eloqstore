@@ -6,7 +6,7 @@
 
 #include "external/xxhash.h"
 
-namespace kvstore
+namespace eloqstore
 {
 constexpr uint8_t checksum_bytes = 8;
 static uint16_t const page_type_offset = checksum_bytes;
@@ -78,4 +78,4 @@ private:
     size_t free_cnt_;
 };
 
-}  // namespace kvstore
+}  // namespace eloqstore

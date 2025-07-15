@@ -5,7 +5,7 @@
 #include "page_mapper.h"
 #include "shard.h"
 
-namespace kvstore
+namespace eloqstore
 {
 
 KvError ReadTask::Read(const TableIdent &tbl_id,
@@ -106,4 +106,4 @@ KvError ReadTask::Floor(const TableIdent &tbl_id,
     expire_ts = iter.ExpireTs();
     return KvError::NoError;
 }
-}  // namespace kvstore
+}  // namespace eloqstore

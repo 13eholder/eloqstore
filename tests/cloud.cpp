@@ -7,9 +7,9 @@
 
 using namespace test_util;
 
-const kvstore::KvOptions cloud_options = {
+const eloqstore::KvOptions cloud_options = {
     .manifest_limit = 1 << 20,
-    .fd_limit = 30 + kvstore::num_reserved_fd,
+    .fd_limit = 30 + eloqstore::num_reserved_fd,
     .num_gc_threads = 0,
     .local_space_limit = 100 << 20,  // 100MB
     .store_path = {"./test-data"},
@@ -18,7 +18,7 @@ const kvstore::KvOptions cloud_options = {
     .data_append_mode = true,
 };
 
-void SetStorePathS3(kvstore::KvOptions &opts)
+void SetStorePathS3(eloqstore::KvOptions &opts)
 {
     // Add username to cloud path to avoid conflicts between users.
     opts.cloud_store_path = "eloq-s3:eloqstore-test";
@@ -28,7 +28,7 @@ void SetStorePathS3(kvstore::KvOptions &opts)
 
 TEST_CASE("simple cloud store", "[cloud]")
 {
-    kvstore::EloqStore *store = InitStore(cloud_options);
+    eloqstore::EloqStore *store = InitStore(cloud_options);
     MapVerifier tester(test_tbl_id, store);
     tester.Upsert(100, 200);
     tester.Delete(100, 150);
@@ -39,12 +39,12 @@ TEST_CASE("simple cloud store", "[cloud]")
 
 TEST_CASE("cloud store with restart", "[cloud]")
 {
-    kvstore::EloqStore *store = InitStore(cloud_options);
+    eloqstore::EloqStore *store = InitStore(cloud_options);
 
     std::vector<std::unique_ptr<MapVerifier>> partitions;
     for (uint32_t i = 0; i < 3; i++)
     {
-        kvstore::TableIdent tbl_id{"t0", i};
+        eloqstore::TableIdent tbl_id{"t0", i};
         auto part = std::make_unique<MapVerifier>(tbl_id, store, false);
         part->SetValueSize(10000);
         partitions.push_back(std::move(part));
@@ -71,19 +71,19 @@ TEST_CASE("cloud store with restart", "[cloud]")
 
 TEST_CASE("cloud store cached file LRU", "[cloud]")
 {
-    kvstore::KvOptions options = cloud_options;
+    eloqstore::KvOptions options = cloud_options;
     options.manifest_limit = 8 << 10;
-    options.fd_limit = 20 + kvstore::num_reserved_fd;
+    options.fd_limit = 20 + eloqstore::num_reserved_fd;
     options.local_space_limit = 2 << 20;
     options.num_retained_archives = 1;
     options.archive_interval_secs = 3;
     options.pages_per_file_shift = 5;
-    kvstore::EloqStore *store = InitStore(options);
+    eloqstore::EloqStore *store = InitStore(options);
 
     std::vector<std::unique_ptr<MapVerifier>> partitions;
     for (uint32_t i = 0; i < 3; i++)
     {
-        kvstore::TableIdent tbl_id{"t0", i};
+        eloqstore::TableIdent tbl_id{"t0", i};
         auto part = std::make_unique<MapVerifier>(tbl_id, store, false, 6);
         part->SetValueSize(10000);
         partitions.push_back(std::move(part));
@@ -106,13 +106,13 @@ TEST_CASE("cloud store cached file LRU", "[cloud]")
 
 TEST_CASE("concurrent test with cloud", "[cloud]")
 {
-    kvstore::KvOptions options = cloud_options;
+    eloqstore::KvOptions options = cloud_options;
     options.num_threads = 4;
     options.rclone_threads = 8;
-    options.fd_limit = 100 + kvstore::num_reserved_fd;
+    options.fd_limit = 100 + eloqstore::num_reserved_fd;
     options.reserve_space_ratio = 5;
     options.local_space_limit = 500 << 20;  // 100MB
-    kvstore::EloqStore *store = InitStore(options);
+    eloqstore::EloqStore *store = InitStore(options);
 
     ConcurrencyTester tester(store, "t1", 50, 1000);
     tester.Init();

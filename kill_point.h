@@ -14,7 +14,7 @@
 
 #define TEST_KILL_POINT(kill_point) TEST_KILL_POINT_WEIGHT(kill_point, 1)
 
-namespace kvstore
+namespace eloqstore
 {
 class KillPoint
 {
@@ -36,4 +36,4 @@ private:
     std::mt19937 gen;
     std::uniform_int_distribution<> dis{0, 1000000000};
 };
-}  // namespace kvstore
+}  // namespace eloqstore

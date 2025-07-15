@@ -8,7 +8,7 @@
         return err;                \
     }
 
-namespace kvstore
+namespace eloqstore
 {
 enum struct KvError : uint8_t
 {
@@ -80,4 +80,4 @@ constexpr bool IsRetryableErr(KvError err)
     }
 }
 
-}  // namespace kvstore
+}  // namespace eloqstore
