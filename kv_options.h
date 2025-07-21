@@ -11,7 +11,6 @@ namespace eloqstore
 {
 constexpr uint8_t max_overflow_pointers = 128;
 constexpr uint16_t max_read_pages_batch = max_overflow_pointers;
-constexpr uint16_t max_write_pages_batch = 256;
 
 struct KvOptions
 {
@@ -57,7 +56,7 @@ struct KvOptions
     /**
      * @brief The maximum number of pages per batch for the write task.
      */
-    uint16_t max_write_batch_pages = 64;
+    uint16_t max_write_batch_pages = 256;
     /**
      * @brief Size of io-uring selected buffer ring.
      * It must be a power-of 2, and can be up to 32768.

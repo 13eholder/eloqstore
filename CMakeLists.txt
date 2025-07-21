@@ -112,3 +112,8 @@ option(WITH_DB_STRESS "build with stress tool" ON)
 if (WITH_DB_STRESS)
     add_subdirectory(db_stress)
 endif()
+
+option(WITH_BENCHMARK "build with benchmark tool" ON)
+if (WITH_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()

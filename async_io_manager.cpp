@@ -397,34 +397,52 @@ KvError IouringMgr::WritePages(const TableIdent &tbl_id,
     CHECK_KV_ERR(err);
     fd_ref.Get()->dirty_ = true;
 
-    auto [fd, registered] = fd_ref.FdPair();
-    io_uring_sqe *sqe = GetSQE(UserDataType::KvTask, ThdTask());
-    if (registered)
+    auto writev = [this, &fd_ref](std::span<VarPage> pages,
+                                  uint32_t offset,
+                                  std::span<iovec> iov)
     {
-        sqe->flags |= IOSQE_FIXED_FILE;
-    }
+        auto [fd, registered] = fd_ref.FdPair();
+        io_uring_sqe *sqe = GetSQE(UserDataType::KvTask, ThdTask());
+        if (registered)
+        {
+            sqe->flags |= IOSQE_FIXED_FILE;
+        }
 
-    size_t num_pages = pages.size();
-    assert(num_pages < max_write_pages_batch);
-    std::array<iovec, max_write_pages_batch> iov;
-    for (size_t i = 0; i < num_pages; i++)
-    {
-        iov[i].iov_base = VarPagePtr(pages[i]);
-        iov[i].iov_len = options_->data_page_size;
-    }
-    io_uring_prep_writev(sqe, fd, iov.data(), num_pages, offset);
+        size_t num_pages = pages.size();
+        for (size_t i = 0; i < num_pages; i++)
+        {
+            iov[i].iov_base = VarPagePtr(pages[i]);
+            iov[i].iov_len = options_->data_page_size;
+        }
+        io_uring_prep_writev(sqe, fd, iov.data(), num_pages, offset);
+
+        int ret = ThdTask()->WaitIoResult();
+        if (ret < 0)
+        {
+            return ToKvError(ret);
+        }
+        if (ret < (num_pages * options_->data_page_size))
+        {
+            return KvError::TryAgain;
+        }
+        return KvError::NoError;
+    };
+
     TEST_KILL_POINT("WritePages")
-
-    int ret = ThdTask()->WaitIoResult();
-    if (ret < 0)
+    size_t num_pages = pages.size();
+    if (num_pages <= 256)
     {
-        return ToKvError(ret);
+        // Allocate iovec on stack (4KB).
+        std::array<iovec, 256> iov;
+        return writev(pages, offset, iov);
     }
-    if (ret < (num_pages * Options()->data_page_size))
+    else
     {
-        return KvError::TryAgain;
+        // Allocate iovec on heap when required space exceed 4KB.
+        std::vector<iovec> iov;
+        iov.resize(num_pages);
+        return writev(pages, offset, iov);
     }
-    return KvError::NoError;
 }
 
 KvError IouringMgr::SyncData(const TableIdent &tbl_id)

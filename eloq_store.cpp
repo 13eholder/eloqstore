@@ -42,8 +42,7 @@ EloqStore::EloqStore(const KvOptions &opts) : options_(opts), stopped_(true)
     {
         LOG(FATAL) << "Invalid option overflow_pointers";
     }
-    if (options_.max_write_batch_pages == 0 ||
-        options_.max_write_batch_pages > max_write_pages_batch)
+    if (options_.max_write_batch_pages == 0)
     {
         LOG(FATAL) << "Invalid option max_write_batch_pages";
     }
@@ -193,12 +192,6 @@ KvError EloqStore::InitStoreSpace()
                 {
                     LOG(ERROR) << ent.path() << " is not directory";
                     return KvError::InvalidArgs;
-                }
-                fs::path wal_path = ent.path() / FileNameManifest;
-                if (!fs::exists(wal_path))
-                {
-                    LOG(WARNING) << "clear incomplete partition " << ent.path();
-                    fs::remove_all(ent.path());
                 }
             }
         }

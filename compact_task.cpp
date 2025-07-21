@@ -63,8 +63,7 @@ KvError CompactTask::CompactDataFile()
     // Sort by file page id.
     std::sort(fp_ids.begin(), fp_ids.end());
 
-    constexpr uint8_t max_move_batch =
-        std::min(max_read_pages_batch, max_write_pages_batch);
+    constexpr uint8_t max_move_batch = max_read_pages_batch;
     std::vector<Page> move_batch_buf;
     move_batch_buf.reserve(max_move_batch);
     std::vector<FilePageId> move_batch_fp_ids;

@@ -50,7 +50,7 @@ void EncodeKey(std::string *dst, uint32_t key)
 
 uint32_t DecodeKey(const std::string &key)
 {
-    return __builtin_bswap32(eloqstore::DecodeFixed32(key.data()));
+    return eloqstore::BigEndianToNative(eloqstore::DecodeFixed32(key.data()));
 }
 
 void EncodeValue(std::string *dst, uint32_t val)
