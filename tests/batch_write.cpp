@@ -33,7 +33,7 @@ TEST_CASE("mixed batch write with read", "[batch_write]")
 
 TEST_CASE("batch write with big key", "[batch_write]")
 {
-    kvstore::EloqStore *store = InitStore(mem_store_opts);
+    eloqstore::EloqStore *store = InitStore(mem_store_opts);
     MapVerifier verify(test_tbl_id, store, false, 200);
     constexpr uint64_t max_val = 10000;
     for (int i = 0; i < 20; i++)

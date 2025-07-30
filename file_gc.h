@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "error.h"
@@ -14,7 +15,9 @@
 
 namespace eloqstore
 {
-class MappingSnapshot;
+void GetRetainedFiles(std::unordered_set<FileId> &result,
+                      const std::vector<uint64_t> &tbl,
+                      uint8_t pages_per_file_shift);
 
 class FileGarbageCollector
 {
@@ -23,15 +26,16 @@ public:
     ~FileGarbageCollector();
     void Start(uint16_t n_workers);
     void Stop();
-    bool AddTask(std::shared_ptr<MappingSnapshot> mapping,
+    bool AddTask(TableIdent tbl_id,
                  uint64_t ts,
-                 FileId max_file_id);
+                 FileId max_file_id,
+                 std::unordered_set<FileId> retained_files);
 
     static KvError Execute(const KvOptions *opts,
                            const std::filesystem::path &dir_path,
-                           const MappingSnapshot *mapping,
                            uint64_t mapping_ts,
-                           FileId max_file_id);
+                           FileId max_file_id,
+                           std::unordered_set<FileId> retained_files);
 
 private:
     void GCRoutine();
@@ -39,13 +43,16 @@ private:
     struct GcTask
     {
         GcTask() = default;
-        GcTask(std::shared_ptr<MappingSnapshot> mapping,
+        GcTask(TableIdent tbl_id,
                uint64_t ts,
-               FileId max_file_id);
+               FileId max_file_id,
+               std::unordered_set<FileId> retained_files);
         bool IsStopSignal() const;
-        std::shared_ptr<MappingSnapshot> mapping_{nullptr};
+
+        TableIdent tbl_id_;
         uint64_t mapping_ts_{0};
         FileId max_file_id_{0};
+        std::unordered_set<FileId> retained_files_;
     };
 
     const KvOptions *options_;

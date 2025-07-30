@@ -144,7 +144,7 @@ KvError CompactTask::CompactDataFile()
     err = UpdateMeta();
     CHECK_KV_ERR(err);
 
-    TriggerFileGC(mapper);
+    TriggerFileGC();
     return KvError::NoError;
 }
 

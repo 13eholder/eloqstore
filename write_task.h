@@ -45,7 +45,7 @@ protected:
      */
     void CompactIfNeeded(PageMapper *mapper) const;
     void TriggerTTL();
-    void TriggerFileGC(const PageMapper *mapper) const;
+    void TriggerFileGC() const;
 
     std::pair<DataPage, KvError> LoadDataPage(PageId page_id);
     std::pair<OverflowPage, KvError> LoadOverflowPage(PageId page_id);

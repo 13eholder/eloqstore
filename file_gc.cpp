@@ -11,6 +11,21 @@
 
 namespace eloqstore
 {
+void GetRetainedFiles(std::unordered_set<FileId> &result,
+                      const std::vector<uint64_t> &tbl,
+                      uint8_t pages_per_file_shift)
+{
+    for (uint64_t val : tbl)
+    {
+        if (MappingSnapshot::IsFilePageId(val))
+        {
+            FilePageId fp_id = MappingSnapshot::DecodeId(val);
+            FileId file_id = fp_id >> pages_per_file_shift;
+            result.emplace(file_id);
+        }
+    }
+};
+
 FileGarbageCollector::~FileGarbageCollector()
 {
     Stop();
@@ -45,13 +60,13 @@ void FileGarbageCollector::Stop()
     LOG(INFO) << "file garbage collector stopped";
 }
 
-bool FileGarbageCollector::AddTask(std::shared_ptr<MappingSnapshot> mapping,
+bool FileGarbageCollector::AddTask(TableIdent tbl_id,
                                    uint64_t ts,
-                                   FileId max_file_id)
+                                   FileId max_file_id,
+                                   std::unordered_set<FileId> retained_files)
 {
-    assert(mapping != nullptr);
-    GcTask new_task(std::move(mapping), ts, max_file_id);
-    return tasks_.enqueue(std::move(new_task));
+    return tasks_.enqueue(
+        GcTask(std::move(tbl_id), ts, max_file_id, std::move(retained_files)));
 }
 
 bool ReadFileContent(fs::path path, std::string &result)
@@ -77,21 +92,20 @@ void FileGarbageCollector::GCRoutine()
         {
             break;
         }
-        const TableIdent *tbl_id = req.mapping_->tbl_ident_;
-        fs::path partition_path = tbl_id->StorePath(options_->store_path);
+        fs::path path = req.tbl_id_.StorePath(options_->store_path);
         KvError err = Execute(options_,
-                              partition_path,
-                              req.mapping_.get(),
+                              path,
                               req.mapping_ts_,
-                              req.max_file_id_);
+                              req.max_file_id_,
+                              std::move(req.retained_files_));
     }
 }
 
 KvError FileGarbageCollector::Execute(const KvOptions *opts,
                                       const fs::path &dir_path,
-                                      const MappingSnapshot *mapping,
                                       uint64_t mapping_ts,
-                                      FileId max_file_id)
+                                      FileId max_file_id,
+                                      std::unordered_set<FileId> retained_files)
 {
     std::vector<uint64_t> archives;
     archives.reserve(opts->num_retained_archives + 1);
@@ -151,21 +165,6 @@ KvError FileGarbageCollector::Execute(const KvOptions *opts,
         }
     }
 
-    std::unordered_set<FileId> retained_data_files;
-    auto get_retained_files =
-        [&retained_data_files, opts](const std::vector<uint64_t> &tbl)
-    {
-        for (uint64_t val : tbl)
-        {
-            if (MappingSnapshot::IsFilePageId(val))
-            {
-                FilePageId fp_id = MappingSnapshot::DecodeId(val);
-                FileId file_id = fp_id >> opts->pages_per_file_shift;
-                retained_data_files.emplace(file_id);
-            }
-        }
-    };
-    get_retained_files(mapping->mapping_tbl_);
     // Get all currently used data files by archives and manifest.
     Replayer replayer(opts);
     std::string buffer;
@@ -191,13 +190,14 @@ KvError FileGarbageCollector::Execute(const KvOptions *opts,
             }
             return err;
         }
-        get_retained_files(replayer.mapping_tbl_);
+        GetRetainedFiles(
+            retained_files, replayer.mapping_tbl_, opts->pages_per_file_shift);
     }
 
-    // Clear unsed data files by any archive.
+    // Clear unused data files by any archive.
     for (FileId file_id : gc_data_files)
     {
-        if (!retained_data_files.contains(file_id))
+        if (!retained_files.contains(file_id))
         {
             path.replace_filename(DataFileName(file_id));
             if (!fs::remove(path))
@@ -209,15 +209,19 @@ KvError FileGarbageCollector::Execute(const KvOptions *opts,
     return KvError::NoError;
 }
 
-FileGarbageCollector::GcTask::GcTask(std::shared_ptr<MappingSnapshot> mapping,
+FileGarbageCollector::GcTask::GcTask(TableIdent tbl_id,
                                      uint64_t ts,
-                                     FileId max_file_id)
-    : mapping_(std::move(mapping)), mapping_ts_(ts), max_file_id_(max_file_id)
+                                     FileId max_file_id,
+                                     std::unordered_set<FileId> retained_files)
+    : tbl_id_(std::move(tbl_id)),
+      mapping_ts_(ts),
+      max_file_id_(max_file_id),
+      retained_files_(std::move(retained_files))
 {
 }
 
 bool FileGarbageCollector::GcTask::IsStopSignal() const
 {
-    return mapping_ == nullptr;
+    return !tbl_id_.IsValid();
 }
 }  // namespace eloqstore

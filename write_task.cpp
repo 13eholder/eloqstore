@@ -325,18 +325,32 @@ void WriteTask::TriggerTTL()
     }
 }
 
-void WriteTask::TriggerFileGC(const PageMapper *mapper) const
+void WriteTask::TriggerFileGC() const
 {
     if (eloq_store->file_gc_ == nullptr)
     {
         // File garbage collector is not enabled.
         return;
     }
+    assert(Options()->data_append_mode);
 
-    auto mapping = mapper->GetMappingSnapshot();
-    uint64_t ts = utils::UnixTs<chrono::microseconds>();
-    FileId cur_file_id = mapper->FilePgAllocator()->CurrentFileId();
-    eloq_store->file_gc_->AddTask(std::move(mapping), ts, cur_file_id);
+    auto [meta, err] = shard->IndexManager()->FindRoot(tbl_ident_);
+    if (err != KvError::NoError)
+    {
+        return;
+    }
+
+    std::unordered_set<FileId> retained_files;
+    const uint8_t shift = Options()->pages_per_file_shift;
+    for (MappingSnapshot *mapping : meta->mapping_snapshots_)
+    {
+        GetRetainedFiles(retained_files, mapping->mapping_tbl_, shift);
+    }
+
+    const uint64_t ts = utils::UnixTs<chrono::microseconds>();
+    FileId cur_file_id = meta->mapper_->FilePgAllocator()->CurrentFileId();
+    eloq_store->file_gc_->AddTask(
+        tbl_ident_, ts, cur_file_id, std::move(retained_files));
 }
 
 std::pair<DataPage, KvError> WriteTask::LoadDataPage(PageId page_id)
