@@ -226,6 +226,12 @@ void IndexPageManager::UpdateRoot(const TableIdent &tbl_ident,
     RootMeta &meta = tbl_it->second;
     meta.root_id_ = new_meta.root_id_;
     meta.ttl_root_id_ = new_meta.ttl_root_id_;
+    if (meta.mapper_ != nullptr && !Options()->data_append_mode)
+    {
+        assert(new_meta.mapper_ != nullptr);
+        MappingSnapshot *prev_snapshot = meta.mapper_->GetMapping();
+        prev_snapshot->next_snapshot_ = new_meta.mapper_->GetMappingSnapshot();
+    }
     meta.mapper_ = std::move(new_meta.mapper_);
     meta.manifest_size_ = new_meta.manifest_size_;
     meta.next_expire_ts_ = new_meta.next_expire_ts_;

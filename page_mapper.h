@@ -64,6 +64,7 @@ struct MappingSnapshot
     const TableIdent *tbl_ident_;
 
     std::vector<uint64_t> mapping_tbl_;
+
     /**
      * @brief A list of file pages to be freed in this mapping snapshot.
      * To-be-freed file pages cannot be put back for re-use if someone is using
@@ -71,6 +72,12 @@ struct MappingSnapshot
      *
      */
     std::vector<FilePageId> to_free_file_pages_;
+    /**
+     * @brief MappingSnapshot should only be freed and it's file pages recycled
+     * after the previous MappingSnapshot has been released. This ensures that
+     * file pages are safely reused without risk of premature reclamation.
+     */
+    std::shared_ptr<MappingSnapshot> next_snapshot_{nullptr};
 };
 
 /**
