@@ -3,6 +3,7 @@
 #include <glog/logging.h>
 #include <jsoncpp/json/json.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
