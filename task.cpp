@@ -1,7 +1,12 @@
 #include "task.h"
 
-#include <cassert>
+#include <glog/logging.h>
 
+#include <cassert>
+#include <string>
+#include <utility>
+
+#include "compression.h"
 #include "index_page_manager.h"
 #include "shard.h"
 
@@ -132,6 +137,57 @@ std::pair<std::string, KvError> GetOverflowValue(const TableIdent &tbl_id,
     }
 
     return {std::move(value), KvError::NoError};
+}
+
+std::pair<std::string_view, KvError> ResolveValue(
+    const TableIdent &tbl_id,
+    MappingSnapshot *mapping,
+    DataPageIter &iter,
+    std::string &storage,
+    const compression::DictCompression *compression)
+{
+    storage.clear();
+    std::string_view raw_value;
+
+    if (iter.IsOverflow())
+    {
+        auto ret = GetOverflowValue(tbl_id, mapping, iter.Value());
+        if (ret.second != KvError::NoError)
+        {
+            return {{}, ret.second};
+        }
+        storage = std::move(ret.first);
+        raw_value = storage;
+    }
+    else
+    {
+        raw_value = iter.Value();
+    }
+
+    if (iter.CompressionType() == compression::CompressionType::None)
+    {
+        return {raw_value, KvError::NoError};
+    }
+    else if (iter.CompressionType() == compression::CompressionType::Dictionary)
+    {
+        std::string uncompressed_value;
+        if (!compression->Decompress(raw_value, uncompressed_value))
+        {
+            return {{}, KvError::Corrupted};
+        }
+        storage = std::move(uncompressed_value);
+        return {storage, KvError::NoError};
+    }
+    else
+    {
+        std::string uncompressed_value;
+        if (!compression::DecompressRaw(raw_value, uncompressed_value))
+        {
+            return {{}, KvError::Corrupted};
+        }
+        storage = std::move(uncompressed_value);
+        return {storage, KvError::NoError};
+    }
 }
 
 uint8_t DecodeOverflowPointers(
