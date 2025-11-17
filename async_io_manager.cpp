@@ -1744,7 +1744,10 @@ KvError IouringMgr::DeleteFiles(const std::vector<std::string> &file_paths)
 }
 
 CloudStoreMgr::CloudStoreMgr(const KvOptions *opts, uint32_t fd_limit)
-    : IouringMgr(opts, fd_limit), file_cleaner_(this), obj_store_(opts)
+    : IouringMgr(opts, fd_limit),
+      file_cleaner_(this),
+      prewarm_task_(this),
+      obj_store_(opts)
 {
     lru_file_head_.next_ = &lru_file_tail_;
     lru_file_tail_.prev_ = &lru_file_head_;
@@ -1760,6 +1763,16 @@ void CloudStoreMgr::Start()
             file_cleaner_.Run();
             return std::move(shard->main_);
         });
+    if (options_->prewarm_cloud_cache)
+    {
+        prewarm_task_.coro_ = boost::context::callcc(
+            [this](continuation &&sink)
+            {
+                shard->main_ = std::move(sink);
+                prewarm_task_.Run();
+                return std::move(shard->main_);
+            });
+    }
 }
 
 bool CloudStoreMgr::IsIdle()
@@ -1770,6 +1783,7 @@ bool CloudStoreMgr::IsIdle()
 void CloudStoreMgr::Stop()
 {
     file_cleaner_.Shutdown();
+    prewarm_task_.Shutdown();
 }
 
 void CloudStoreMgr::Submit()
@@ -1784,6 +1798,16 @@ void CloudStoreMgr::PollComplete()
     obj_store_.GetHttpManager()->ProcessCompletedRequests();
 
     IouringMgr::PollComplete();
+}
+
+bool CloudStoreMgr::NeedPrewarm() const
+{
+    return options_->prewarm_cloud_cache && prewarm_task_.HasPending();
+}
+
+void CloudStoreMgr::RunPrewarm()
+{
+    prewarm_task_.Resume();
 }
 
 KvError CloudStoreMgr::SwitchManifest(const TableIdent &tbl_id,

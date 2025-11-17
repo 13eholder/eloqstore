@@ -1,5 +1,13 @@
 #include "shard.h"
 
+#include <glog/logging.h>
+
+#include <array>
+#include <cassert>
+#include <chrono>
+#include <cstddef>
+
+#include "async_io_manager.h"
 #include "list_object_task.h"
 #include "utils.h"
 
@@ -36,22 +44,23 @@ void Shard::WorkLoop()
     auto dequeue_requests = [this, &reqs]() -> int
     {
         size_t nreqs = requests_.try_dequeue_bulk(reqs.data(), reqs.size());
-        // only wait when no request no active task and io is idle,
-        // so will complete workloop after all task done and io is idle
-        if (nreqs == 0 && task_mgr_.NumActive() == 0 && io_mgr_->IsIdle())
+        // Idle state, wait for new requests or exit.
+        while (nreqs == 0 && task_mgr_.NumActive() == 0 && io_mgr_->IsIdle())
         {
-            // Idle state, wait for new requests or exit.
-            while (nreqs == 0)
+            if (store_->IsStopped())
             {
-                if (store_->IsStopped())
-                {
-                    return -1;
-                }
-                const auto timeout = std::chrono::milliseconds(100);
-                nreqs = requests_.wait_dequeue_bulk_timed(
-                    reqs.data(), reqs.size(), timeout);
+                return -1;
             }
+            if (io_mgr_->NeedPrewarm())
+            {
+                io_mgr_->RunPrewarm();
+                return 0;
+            }
+            const auto timeout = std::chrono::milliseconds(100);
+            nreqs = requests_.wait_dequeue_bulk_timed(
+                reqs.data(), reqs.size(), timeout);
         }
+
         return nreqs;
     };
 
@@ -68,7 +77,6 @@ void Shard::WorkLoop()
                 break;
             }
         }
-
         int nreqs = dequeue_requests();
         if (nreqs < 0)
         {
@@ -251,7 +259,8 @@ void Shard::ProcessReq(KvRequest *req)
         {
             KvTask *current_task = ThdTask();
             auto list_object_req = static_cast<ListObjectRequest *>(req);
-            ObjectStore::ListTask list_task("");
+            ObjectStore::ListTask list_task(list_object_req->RemotePath());
+            list_task.SetRecursive(list_object_req->Recursive());
 
             list_task.SetKvTask(task);
             auto cloud_mgr = static_cast<CloudStoreMgr *>(shard->io_mgr_.get());
@@ -267,7 +276,9 @@ void Shard::ProcessReq(KvRequest *req)
             }
 
             if (!utils::ParseRCloneListObjectsResponse(
-                    list_task.response_data_, *list_object_req->GetObjects()))
+                    list_task.response_data_,
+                    list_object_req->GetObjects(),
+                    list_object_req->GetDetails()))
             {
                 LOG(ERROR) << "Failed to parse ListObjects response";
                 return KvError::IoFail;
@@ -395,7 +406,10 @@ void Shard::WorkOneRound()
     if (nreqs == 0 && task_mgr_.NumActive() == 0 && io_mgr_->IsIdle())
     {
         // No request and no active task and no active io.
-        return;
+        if (io_mgr_->NeedPrewarm())
+            io_mgr_->RunPrewarm();
+        else
+            return;
     }
 
     req_queue_size_.fetch_sub(nreqs, std::memory_order_relaxed);
@@ -441,6 +455,11 @@ WriteRequest *Shard::PendingWriteQueue::PopFront()
 bool Shard::PendingWriteQueue::Empty() const
 {
     return head_ == nullptr;
+}
+
+bool Shard::HasPendingRequests() const
+{
+    return requests_.size_approx() > 0;
 }
 
 }  // namespace eloqstore

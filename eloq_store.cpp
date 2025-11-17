@@ -20,6 +20,7 @@
 #include "async_io_manager.h"
 #include "common.h"
 #include "file_gc.h"
+#include "prewarm_task.h"
 #include "shard.h"
 #include "utils.h"
 
@@ -88,6 +89,11 @@ bool EloqStore::ValidateOptions(const KvOptions &opts)
                        << "local_space_limit";
             return false;
         }
+    }
+    else if (opts.prewarm_cloud_cache)
+    {
+        LOG(ERROR) << "prewarm_cloud_cache requires cloud_store_path to be set";
+        return false;
     }
 
     if (opts.data_append_mode)
@@ -177,6 +183,15 @@ KvError EloqStore::Start()
     for (auto &shard : shards_)
     {
         shard->Start();
+    }
+
+    if (!options_.cloud_store_path.empty() && options_.prewarm_cloud_cache)
+    {
+        if (prewarm_service_ == nullptr)
+        {
+            prewarm_service_ = std::make_unique<PrewarmService>(this);
+        }
+        prewarm_service_->Start();
     }
 
 #ifdef ELOQ_MODULE_ENABLED
@@ -453,10 +468,14 @@ void EloqStore::Stop()
 #ifdef ELOQ_MODULE_ENABLED
     eloq::unregister_module(module_.get());
 #endif
-
     if (archive_crond_ != nullptr)
     {
         archive_crond_->Stop();
+    }
+
+    if (prewarm_service_ != nullptr)
+    {
+        prewarm_service_->Stop();
     }
 
     stopped_.store(true, std::memory_order_relaxed);

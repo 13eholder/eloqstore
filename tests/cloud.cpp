@@ -1,7 +1,12 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
+#include <filesystem>
+#include <functional>
 #include <map>
+#include <thread>
+#include <unordered_set>
+#include <vector>
 
 #include "common.h"
 #include "kv_options.h"
@@ -20,6 +25,218 @@ TEST_CASE("simple cloud store", "[cloud]")
     tester.Upsert(0, 50);
     tester.WriteRnd(0, 200);
     tester.WriteRnd(0, 200);
+}
+
+namespace
+{
+template <typename Pred>
+bool WaitForCondition(std::chrono::milliseconds timeout,
+                      std::chrono::milliseconds step,
+                      Pred &&pred)
+{
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        if (pred())
+        {
+            return true;
+        }
+        std::this_thread::sleep_for(step);
+    }
+    return pred();
+}
+}  // namespace
+
+TEST_CASE("cloud prewarm downloads while shards idle", "[cloud][prewarm]")
+{
+    using namespace std::chrono_literals;
+    namespace fs = std::filesystem;
+
+    eloqstore::KvOptions options = cloud_options;
+    options.prewarm_cloud_cache = true;
+    options.local_space_limit = 64ULL << 22;
+    eloqstore::EloqStore *store = InitStore(options);
+
+    MapVerifier writer(test_tbl_id, store);
+    writer.SetValueSize(4096);
+    writer.WriteRnd(0, 8000);
+    writer.SetAutoClean(false);
+    writer.Validate();
+
+    store->Stop();
+    CleanupLocalStore(options);
+
+    REQUIRE(store->Start() == eloqstore::KvError::NoError);
+    writer.SetStore(store);
+
+    const fs::path partition_path =
+        fs::path(options.store_path[0]) / test_tbl_id.ToString();
+
+    LOG(INFO) << "aa";
+    REQUIRE(WaitForCondition(3s,
+                             10ms,
+                             [&]() {
+                                 return fs::exists(partition_path) &&
+                                        !fs::is_empty(partition_path);
+                             }));
+
+    const uint64_t initial_size = DirectorySize(partition_path);
+    for (int i = 0; i < 5; ++i)
+    {
+        auto begin = std::chrono::steady_clock::now();
+        writer.Read(0);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - begin);
+        REQUIRE(elapsed.count() < 1000);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    REQUIRE(WaitForCondition(10s,
+                             20ms,
+                             [&]()
+                             {
+                                 return fs::exists(partition_path) &&
+                                        DirectorySize(partition_path) >=
+                                            initial_size +
+                                                options.DataFileSize();
+                             }));
+
+    writer.Validate();
+    store->Stop();
+}
+
+TEST_CASE("cloud prewarm respects cache budget", "[cloud][prewarm]")
+{
+    using namespace std::chrono_literals;
+    namespace fs = std::filesystem;
+
+    eloqstore::KvOptions options = cloud_options;
+    options.prewarm_cloud_cache = true;
+    options.local_space_limit = 2ULL << 30;
+
+    eloqstore::EloqStore *store = InitStore(options);
+    eloqstore::TableIdent tbl_id{"prewarm", 0};
+    MapVerifier writer(tbl_id, store);
+    writer.SetValueSize(16 << 10);
+    writer.Upsert(0, 500);
+    writer.Validate();
+
+    auto baseline_dataset = writer.DataSet();
+    REQUIRE_FALSE(baseline_dataset.empty());
+
+    store->Stop();
+
+    auto remote_bytes =
+        GetCloudSize(options.cloud_store_daemon_url, options.cloud_store_path);
+    REQUIRE(remote_bytes.has_value());
+
+    CleanupLocalStore(options);
+
+    REQUIRE(store->Start() == eloqstore::KvError::NoError);
+    writer.SetStore(store);
+
+    const auto partition_path =
+        fs::path(options.store_path[0]) / tbl_id.ToString();
+
+    uint64_t limit_bytes = options.local_space_limit;
+    uint64_t expected_target = std::min(limit_bytes, remote_bytes.value());
+
+    uint64_t local_size = 0;
+    auto size_reached = [&]() -> bool
+    {
+        local_size = DirectorySize(partition_path);
+        if (expected_target == 0)
+        {
+            return local_size == 0;
+        }
+        double ratio = static_cast<double>(local_size) /
+                       static_cast<double>(expected_target);
+        return ratio >= 0.9;
+    };
+
+    REQUIRE(WaitForCondition(20s, 100ms, size_reached));
+
+    if (expected_target == 0)
+    {
+        REQUIRE(local_size == 0);
+    }
+    else
+    {
+        double ratio = static_cast<double>(local_size) /
+                       static_cast<double>(expected_target);
+        REQUIRE(ratio >= 0.9);
+    }
+}
+
+TEST_CASE("cloud prewarm honors partition filter", "[cloud][prewarm]")
+{
+    using namespace std::chrono_literals;
+    namespace fs = std::filesystem;
+
+    eloqstore::KvOptions options = cloud_options;
+    options.prewarm_cloud_cache = true;
+    options.local_space_limit = 2ULL << 30;
+
+    const std::string tbl_name = "prewarm_filter";
+    std::vector<eloqstore::TableIdent> partitions;
+    for (uint32_t i = 0; i < 3; ++i)
+    {
+        partitions.emplace_back(tbl_name, i);
+    }
+
+    const std::unordered_set<eloqstore::TableIdent> included = {
+        partitions[0],
+        partitions[1],
+    };
+    options.prewarm_filter =
+        [included](const eloqstore::TableIdent &tbl) -> bool
+    { return included.count(tbl) != 0; };
+
+    eloqstore::EloqStore *store = InitStore(options);
+    for (const auto &tbl_id : partitions)
+    {
+        MapVerifier writer(tbl_id, store);
+        writer.SetAutoClean(false);
+        writer.SetValueSize(4096);
+        writer.WriteRnd(0, 4000);
+        writer.Validate();
+    }
+
+    store->Stop();
+    CleanupLocalStore(options);
+    REQUIRE(store->Start() == eloqstore::KvError::NoError);
+
+    REQUIRE(WaitForCondition(
+        12s,
+        20ms,
+        [&]()
+        {
+            for (const auto &tbl_id : included)
+            {
+                const fs::path partition_path =
+                    fs::path(options.store_path[0]) / tbl_id.ToString();
+                if (!fs::exists(partition_path) || fs::is_empty(partition_path))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }));
+
+    for (const auto &tbl_id : partitions)
+    {
+        const fs::path partition_path =
+            fs::path(options.store_path[0]) / tbl_id.ToString();
+        if (included.count(tbl_id) != 0)
+        {
+            REQUIRE(fs::exists(partition_path));
+            REQUIRE(!fs::is_empty(partition_path));
+        }
+        else
+        {
+            REQUIRE_FALSE(fs::exists(partition_path));
+        }
+    }
 }
 
 TEST_CASE("cloud gc preserves archived data after truncate",

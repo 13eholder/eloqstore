@@ -18,6 +18,7 @@
 #include "error.h"
 #include "kv_options.h"
 #include "object_store.h"
+#include "prewarm_task.h"
 #include "task.h"
 #include "types.h"
 
@@ -26,6 +27,7 @@ namespace eloqstore
 class WriteReq;
 class WriteTask;
 class MemIndexPage;
+class PrewarmTask;
 
 class ManifestFile
 {
@@ -64,6 +66,11 @@ public:
     virtual void Stop() {};
     virtual void Submit() = 0;
     virtual void PollComplete() = 0;
+    virtual bool NeedPrewarm() const
+    {
+        return false;
+    }
+    virtual void RunPrewarm() {};
 
     /** These methods are provided for kv task. */
     virtual std::pair<Page, KvError> ReadPage(const TableIdent &tbl_id,
@@ -357,6 +364,10 @@ class CloudStoreMgr : public IouringMgr
 {
 public:
     CloudStoreMgr(const KvOptions *opts, uint32_t fd_limit);
+    static constexpr FileId ManifestFileId()
+    {
+        return LruFD::kManifest;
+    }
     void Start() override;
     bool IsIdle() override;
     void Stop() override;
@@ -376,6 +387,13 @@ public:
     KvError ReadArchiveFileAndDelete(const std::string &file_path,
                                      std::string &content);
 
+    bool NeedPrewarm() const override;
+    void RunPrewarm() override;
+    size_t LocalCacheRemained() const
+    {
+        return shard_local_space_limit_ - used_local_space_;
+    }
+
 private:
     int CreateFile(LruFD::Ref dir_fd, FileId file_id) override;
     int OpenFile(const TableIdent &tbl_id,
@@ -394,7 +412,6 @@ private:
     void EnqueClosedFile(FileKey key);
     bool HasEvictableFile() const;
     int ReserveCacheSpace(size_t size);
-
     static std::string ToFilename(FileId file_id);
     size_t EstimateFileSize(FileId file_id) const;
     size_t EstimateFileSize(std::string_view filename) const;
@@ -439,7 +456,7 @@ private:
     class FileCleaner : public KvTask
     {
     public:
-        FileCleaner(CloudStoreMgr *io_mgr) : io_mgr_(io_mgr) {};
+        explicit FileCleaner(CloudStoreMgr *io_mgr) : io_mgr_(io_mgr) {};
         TaskType Type() const override;
         void Run();
         void Shutdown();
@@ -452,8 +469,12 @@ private:
     };
 
     FileCleaner file_cleaner_;
+    PrewarmTask prewarm_task_;
 
     ObjectStore obj_store_;
+
+    friend class PrewarmTask;
+    friend class PrewarmService;
 };
 
 class MemStoreMgr : public AsyncIoManager

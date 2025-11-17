@@ -4,11 +4,17 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "error.h"
 #include "kv_options.h"
 #include "types.h"
+
+namespace utils
+{
+struct CloudObjectInfo;
+}  // namespace utils
 
 namespace eloqstore
 {
@@ -20,6 +26,7 @@ enum class RequestType : uint8_t
     Floor,
     Scan,
     ListObject,
+    Prewarm,
     BatchWrite,
     Truncate,
     DropTable,
@@ -56,6 +63,7 @@ protected:
 
     friend class Shard;
     friend class EloqStore;
+    friend class PrewarmService;
 };
 
 class ReadRequest : public KvRequest
@@ -189,13 +197,44 @@ public:
     {
     }
 
+    void SetRemotePath(std::string remote_path)
+    {
+        remote_path_ = std::move(remote_path);
+    }
+    void SetRecursive(bool recursive)
+    {
+        recursive_ = recursive;
+    }
+
+    const std::string &RemotePath() const
+    {
+        return remote_path_;
+    }
+
+    void SetDetails(std::vector<utils::CloudObjectInfo> *details)
+    {
+        details_ = details;
+    }
+
     std::vector<std::string> *GetObjects()
     {
         return objects_;
     }
 
+    std::vector<utils::CloudObjectInfo> *GetDetails() const
+    {
+        return details_;
+    }
+    bool Recursive() const
+    {
+        return recursive_;
+    }
+
 private:
     std::vector<std::string> *objects_;
+    std::vector<utils::CloudObjectInfo> *details_{nullptr};
+    std::string remote_path_;
+    bool recursive_{false};
 };
 
 class WriteRequest : public KvRequest
@@ -289,6 +328,7 @@ public:
 class ArchiveCrond;
 class ObjectStore;
 class EloqStoreModule;
+class PrewarmService;
 
 class EloqStore
 {
@@ -332,6 +372,7 @@ private:
     std::atomic<bool> stopped_{true};
 
     std::unique_ptr<ArchiveCrond> archive_crond_{nullptr};
+    std::unique_ptr<PrewarmService> prewarm_service_{nullptr};
 #ifdef ELOQ_MODULE_ENABLED
     std::unique_ptr<EloqStoreModule> module_{nullptr};
 #endif
@@ -340,5 +381,6 @@ private:
     friend class AsyncIoManager;
     friend class IouringMgr;
     friend class WriteTask;
+    friend class PrewarmService;
 };
 }  // namespace eloqstore

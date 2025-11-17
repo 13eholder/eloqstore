@@ -105,11 +105,20 @@ public:
     public:
         explicit ListTask(std::string_view remote_path)
             : remote_path_(remote_path) {};
+        void SetRecursive(bool recurse)
+        {
+            recurse_ = recurse;
+        }
+        bool Recursive() const
+        {
+            return recurse_;
+        }
         Type TaskType() override
         {
             return Type::AsyncList;
         }
         std::string remote_path_;
+        bool recurse_{false};
     };
 
     class DeleteTask : public Task
