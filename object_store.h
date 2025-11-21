@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "error.h"
@@ -142,6 +143,16 @@ private:
 class AsyncHttpManager
 {
 public:
+    struct DaemonEndpoint
+    {
+        std::string base_url;
+        std::string upload_url;
+        std::string download_url;
+        std::string list_url;
+        std::string delete_url;
+        std::string purge_url;
+    };
+
     explicit AsyncHttpManager(const KvOptions *options);
     ~AsyncHttpManager();
 
@@ -190,12 +201,8 @@ private:
     std::unordered_map<CURL *, ObjectStore::Task *> active_requests_;
     std::multimap<std::chrono::steady_clock::time_point, ObjectStore::Task *>
         pending_retries_;
-    const std::string daemon_url_;
-    const std::string daemon_upload_url_;
-    const std::string daemon_download_url_;
-    const std::string daemon_list_url_;
-    const std::string daemon_delete_url_;
-    const std::string daemon_purge_url_;
+    std::vector<DaemonEndpoint> endpoints_;
+    std::uint32_t next_endpoint_{0};
     const KvOptions *options_;
     int running_handles_{0};
 };

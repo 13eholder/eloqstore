@@ -11,6 +11,8 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 #include "inih/cpp/INIReader.h"
 
@@ -81,6 +83,52 @@ static uint64_t ParseSizeWithUnit(std::string_view s)
     }
 
     return v * mul;
+}
+
+static std::vector<std::string> SplitDaemonList(std::string_view raw)
+{
+    auto is_delim = [](char ch)
+    {
+        return ch == ',' || ch == ';' ||
+               std::isspace(static_cast<unsigned char>(ch));
+    };
+
+    std::vector<std::string> urls;
+    std::string current;
+    auto flush = [&]()
+    {
+        size_t begin = 0;
+        while (begin < current.size() &&
+               std::isspace(static_cast<unsigned char>(current[begin])))
+        {
+            begin++;
+        }
+        size_t end = current.size();
+        while (end > begin &&
+               std::isspace(static_cast<unsigned char>(current[end - 1])))
+        {
+            end--;
+        }
+        if (end > begin)
+        {
+            urls.emplace_back(current.substr(begin, end - begin));
+        }
+        current.clear();
+    };
+
+    for (char ch : raw)
+    {
+        if (is_delim(ch))
+        {
+            flush();
+        }
+        else
+        {
+            current.push_back(ch);
+        }
+    }
+    flush();
+    return urls;
 }
 int KvOptions::LoadFromIni(const char *path)
 {
@@ -191,10 +239,22 @@ int KvOptions::LoadFromIni(const char *path)
         prewarm_cloud_cache =
             reader.GetBoolean(sec_run, "prewarm_cloud_cache", false);
     }
-    if (reader.HasValue(sec_run, "cloud_store_daemon_url"))
+    if (reader.HasValue(sec_run, "cloud_store_daemon_ports") ||
+        reader.HasValue(sec_run, "cloud_store_daemon_url"))
     {
-        cloud_store_daemon_url = reader.Get(
-            sec_run, "cloud_store_daemon_url", "http://127.0.0.1:5572");
+        std::string raw =
+            reader.Get(sec_run, "cloud_store_daemon_ports", "5572");
+        // Backward compatibility: old key name
+        if (raw == "5572")
+        {
+            raw = reader.Get(sec_run, "cloud_store_daemon_url", raw);
+        }
+
+        auto parsed = SplitDaemonList(raw);
+        if (!parsed.empty())
+        {
+            cloud_store_daemon_ports = std::move(parsed);
+        }
     }
 
     constexpr char sec_permanent[] = "permanent";
@@ -289,6 +349,7 @@ bool KvOptions::operator==(const KvOptions &other) const
            prewarm_cloud_cache == other.prewarm_cloud_cache &&
            store_path == other.store_path &&
            cloud_store_path == other.cloud_store_path &&
+           cloud_store_daemon_ports == other.cloud_store_daemon_ports &&
            data_page_size == other.data_page_size &&
            pages_per_file_shift == other.pages_per_file_shift &&
            overflow_pointers == other.overflow_pointers &&

@@ -71,8 +71,10 @@ bool CheckCloudPartitionExists(const eloqstore::KvOptions &opts,
         return false;
     }
 
-    std::vector<std::string> cloud_files = ListCloudFiles(
-        opts.cloud_store_daemon_url, opts.cloud_store_path, tbl_id.ToString());
+    std::vector<std::string> cloud_files =
+        ListCloudFiles(opts.cloud_store_daemon_ports,
+                       opts.cloud_store_path,
+                       tbl_id.ToString());
 
     LOG(INFO) << "CheckCloudPartitionExists, cloud_files size: "
               << cloud_files.size();
@@ -260,7 +262,7 @@ TEST_CASE("archive prevents data deletion after truncate", "[gc][archive]")
     {
         // For cloud mode, check that some files still exist (archive files)
         std::vector<std::string> remaining_files =
-            ListCloudFiles(archive_gc_opts.cloud_store_daemon_url,
+            ListCloudFiles(archive_gc_opts.cloud_store_daemon_ports,
                            archive_gc_opts.cloud_store_path,
                            tbl_id.ToString());
 
