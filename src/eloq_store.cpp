@@ -172,8 +172,9 @@ EloqStore::~EloqStore()
     }
 }
 
-KvError EloqStore::Start()
+KvError EloqStore::Start(uint64_t term)
 {
+    LOG(INFO) << "===Start eloqstore, term: " << term;
     if (!IsStopped())
     {
         LOG(ERROR) << "EloqStore started , do not start again";
@@ -186,6 +187,16 @@ KvError EloqStore::Start()
     {
         KvError err = InitStoreSpace();
         CHECK_KV_ERR(err);
+    }
+
+    if (options_.cloud_store_path.empty())
+    {
+        // local mode, set term to 0
+        term = 0;
+    }
+    else
+    {
+        term_ = term;
     }
 
     // There are files opened at very early stage like stdin/stdout/stderr, glog
