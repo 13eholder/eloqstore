@@ -13,23 +13,42 @@ install_clang_format_18_1_8() {
     SUDO="sudo"
   fi
 
+  local ARCH DPKG TINFO_PKG_URL LLVM_PKG_URL
+  ARCH="$(uname -m)"
+  DPKG="$(dpkg --print-architecture)"
+
   # 1) Install libtinfo5 via the exact commands you requested (amd64 deb)
   echo "[INFO] Installing libtinfo5"
+  case "$ARCH" in
+    x86_64)
+      TINFO_PKG_URL="https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses"
+      ;;
+    aarch64|arm64)
+      TINFO_PKG_URL="https://cn.ports.ubuntu.com/pool/universe/n/ncurses"
+      ;;
+    *)
+      echo "[ERROR] Unsupported arch: $ARCH"
+      return 1
+      ;;
+  esac
+
   $SUDO apt update
-  wget -q -O ./libtinfo5_6.3-2ubuntu0.1_amd64.deb \
-    http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-  $SUDO apt install -y ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+  local TINFO_DEB="libtinfo5_6.3-2ubuntu0.1_${DPKG}.deb"
+  local TINFO_URL="${TINFO_PKG_URL}/${TINFO_DEB}"
+
+  echo "[INFO] Downloading ${TINFO_DEB} from ${TINFO_URL}"
+  
+  wget -q -O "./${TINFO_DEB}" "$TINFO_URL" || { echo "[ERROR] Download failed: ${TINFO_URL}" >&2; return 1; }
+  $SUDO apt install -y "./${TINFO_DEB}" || return 1
 
   # 2) Download LLVM clang-format 18.1.8
   echo "[INFO] Downloading LLVM clang-format 18.1.8"
-  local ARCH PKG_URL
-  ARCH="$(uname -m)"
   case "$ARCH" in
     x86_64)
-      PKG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz"
+      LLVM_PKG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz"
       ;;
     aarch64|arm64)
-      PKG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-aarch64-linux-gnu.tar.xz"
+      LLVM_PKG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-aarch64-linux-gnu.tar.xz"
       ;;
     *)
       echo "Unsupported arch: $ARCH" >&2
@@ -38,7 +57,10 @@ install_clang_format_18_1_8() {
   esac
 
   mkdir -p ./llvm-18.1.8
-  curl -L "$PKG_URL" -o /tmp/llvm-18.1.8.tar.xz
+
+  echo "[INFO] Downloading LLVM clang-format 18.1.8 from ${LLVM_PKG_URL}"
+
+  curl -L "$LLVM_PKG_URL" -o /tmp/llvm-18.1.8.tar.xz
   tar -xf /tmp/llvm-18.1.8.tar.xz -C ./llvm-18.1.8 --strip-components=1
   rm -f /tmp/llvm-18.1.8.tar.xz
 
@@ -47,6 +69,7 @@ install_clang_format_18_1_8() {
 
   cd -
   echo "[INFO] Verifying clang-format-18.1.8"
+  
   # 4) Verify
   if /usr/local/bin/clang-format-18.1.8 --version 2>/dev/null | grep -Eq 'clang-format version[[:space:]]+18\.1\.8\b'; then
     echo "[OK] Installed: $(/usr/local/bin/clang-format-18.1.8 --version)"
@@ -68,7 +91,7 @@ ensure_clang_format_18_1_8() {
 }
 
 # Format all files in the project
-ensure_clang_format_18_1_8
+ensure_clang_format_18_1_8 || { echo "[ERROR] Format failed" >&2; exit 1; }
 
 git ls-files -z '*.c' '*.cc' '*.cpp' '*.h' '*.hpp' \
 | awk -v RS='\0' -v ORS='\0' '!/^(third_party|vendor|build|external)\//' \
