@@ -3215,14 +3215,19 @@ KvError CloudStoreMgr::SyncFile(LruFD::Ref fd)
         const TableIdent &tbl_id = *fd.Get()->tbl_->tbl_id_;
         uint64_t term = fd.Get()->term_;
         KvError err = UploadFiles(tbl_id, {ToFilename(file_id, term)});
-        if (err != KvError::NoError)
+        if (file_id == LruFD::kManifest)
         {
-            if (file_id == LruFD::kManifest)
+            // For manifest, retry until success or error that
+            // means manifest is not uploaded (insufficient storage).
+            while (err != KvError::NoError &&
+                   err != KvError::OssInsufficientStorage)
             {
-                LOG(FATAL) << "can not upload manifest: " << ErrorString(err);
+                LOG(WARNING) << "Manifest upload failed with "
+                             << ErrorString(err) << ", retrying.";
+                err = UploadFiles(tbl_id, {ToFilename(file_id, term)});
             }
-            return err;
         }
+        return err;
     }
 
     fd.Get()->dirty_ = false;
