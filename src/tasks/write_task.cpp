@@ -58,6 +58,7 @@ void WriteTask::Reset(const TableIdent &tbl_id)
     write_err_ = KvError::NoError;
     wal_builder_.Reset();
     file_id_term_mapping_dirty_ = false;
+    last_append_file_id_.reset();
     cow_meta_ = CowRootMeta();
     size_t buf_size = Options()->write_buffer_size;
     if (buf_size == 0)
@@ -66,6 +67,11 @@ void WriteTask::Reset(const TableIdent &tbl_id)
     }
     append_aggregator_ = WriteBufferAggregator(buf_size);
     append_aggregator_.Reset();
+    upload_state_.ResetMetadata();
+    if (!Options()->cloud_store_path.empty())
+    {
+        upload_state_.buffer.EnsureDefaultReserve();
+    }
 }
 
 void WriteTask::Abort()
@@ -76,10 +82,9 @@ void WriteTask::Abort()
         // Drain pending async writes before task is freed.
         (void) WaitWrite();
     }
-    else
-    {
-        IoMgr()->AbortWrite(tbl_ident_);
-    }
+    // Always invoke AbortWrite so CloudStoreMgr can clear per-table upload
+    // segments and io manager can reset dirty state.
+    IoMgr()->AbortWrite(tbl_ident_);
 
     if (cow_meta_.old_mapping_ != nullptr)
     {
@@ -87,6 +92,8 @@ void WriteTask::Abort()
         cow_meta_.old_mapping_->ClearFreeFilePage();
     }
     cow_meta_ = CowRootMeta();
+    last_append_file_id_.reset();
+    upload_state_.ResetMetadata();
 }
 
 KvError WriteTask::WritePage(DataPage &&page)
@@ -151,12 +158,31 @@ KvError WriteTask::AppendWritePage(VarPage page, FilePageId file_page_id)
     const KvOptions *opts = Options();
     const size_t page_size = opts->data_page_size;
     auto [file_id, offset] = ConvFilePageId(file_page_id);
+    const bool cloud_append_mode =
+        opts->data_append_mode && !opts->cloud_store_path.empty();
 
     char *page_ptr = VarPagePtr(page);
     if (!append_aggregator_.HasBuffer() ||
         !append_aggregator_.CanAppend(file_id, offset, page_size))
     {
+        const bool file_switched = cloud_append_mode &&
+                                   last_append_file_id_.has_value() &&
+                                   last_append_file_id_.value() != file_id;
+        const FileId sealed_file_id =
+            file_switched ? last_append_file_id_.value() : file_id;
+        // Flush any pending writes in the aggregator
         FlushAppendWrites();
+        // In cloud append mode, trigger immediate upload of sealed file
+        // This ensures sealed data files are uploaded promptly
+        if (file_switched)
+        {
+            // Wait for flush to complete before uploading
+            KvError err = WaitWrite();
+            CHECK_KV_ERR(err);
+            // Trigger upload of the sealed file (may use in-memory segments)
+            err = IoMgr()->OnDataFileSealed(tbl_ident_, sealed_file_id);
+            CHECK_KV_ERR(err);
+        }
         uint16_t buf_index = 0;
         char *buf = IoMgr()->AcquireWriteBuffer(buf_index);
         if (buf == nullptr)
@@ -176,6 +202,7 @@ KvError WriteTask::AppendWritePage(VarPage page, FilePageId file_page_id)
     std::memcpy(dst, page_ptr, page_size);
 
     append_aggregator_.AddPage(std::move(page), nullptr, 0);
+    last_append_file_id_ = file_id;
 
     if (append_aggregator_.ShouldFlush(page_size))
     {

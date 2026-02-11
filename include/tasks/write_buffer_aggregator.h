@@ -32,6 +32,18 @@ public:
     void Reset();
     bool HasBuffer() const;
     bool HasData() const;
+    /**
+     * @brief Get the file ID of the current buffer.
+     *
+     * Returns the file_id associated with the current write buffer.
+     * Used to detect when file_id switches (indicating a file seal event).
+     *
+     * @return Current FileId, or invalid if no buffer/data
+     */
+    FileId CurrentFileId() const
+    {
+        return file_id_;
+    }
     void SetBuffer(char *buffer,
                    uint16_t buffer_index,
                    FileId file_id,

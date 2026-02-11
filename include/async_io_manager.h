@@ -66,7 +66,13 @@ class EloqStore;
 class AsyncIoManager
 {
 public:
-    explicit AsyncIoManager(const KvOptions *opts) : options_(opts) {};
+    explicit AsyncIoManager(const KvOptions *opts) : options_(opts)
+    {
+        if (options_ != nullptr)
+        {
+            DirectIoBuffer::UpdateDefaultReserve(options_->DataFileSize());
+        }
+    };
     virtual ~AsyncIoManager() = default;
     static std::unique_ptr<AsyncIoManager> Instance(const EloqStore *store,
                                                     uint32_t fd_limit);
@@ -168,6 +174,67 @@ public:
         (void) release_indices;
         (void) use_fixed;
         return KvError::InvalidArgs;
+    }
+    /**
+     * @brief Hook for cloud mode to capture data ranges before write submit.
+     *
+     * This callback is invoked during write preparation (before write
+     * completion is known), allowing cloud storage implementations to track
+     * ranges in memory for efficient segment-based uploads. The data view
+     * points to the bytes scheduled for this write and remains valid only
+     * during the callback.
+     *
+     * In cloud append mode, this enables uploading file tails without reading
+     * from disk by maintaining in-memory segments of recently prepared writes.
+     *
+     * @param tbl_id Table identifier
+     * @param file_id File identifier (data file or manifest)
+     * @param term File term (for data files) or manifest term
+     * @param offset Byte offset where data will be written
+     * @param data View of the write payload (valid only during callback)
+     *
+     * @note Default implementation is no-op. Override in CloudStoreMgr to
+     *       record segments for later upload.
+     */
+    virtual void OnFileRangeWritePrepared(const TableIdent &tbl_id,
+                                          FileId file_id,
+                                          uint64_t term,
+                                          uint64_t offset,
+                                          std::string_view data)
+    {
+        (void) tbl_id;
+        (void) file_id;
+        (void) term;
+        (void) offset;
+        (void) data;
+    }
+    /**
+     * @brief Hook for cloud append mode: invoked when current data file is
+     * sealed.
+     *
+     * This callback is triggered synchronously when the write path switches to
+     * a new data file (file_id increments), indicating the previous file is
+     * complete and should be uploaded immediately. This enables immediate
+     * upload of sealed data files in cloud append mode.
+     *
+     * The call is synchronous within the current write task context. Returning
+     * an error will fail the write request and trigger AbortWrite to clean up
+     * any partial state.
+     *
+     * @param tbl_id Table identifier
+     * @param file_id The file_id that was just sealed (before switching to
+     * next)
+     *
+     * @return KvError::NoError on success, error code on failure
+     *
+     * @note Default implementation returns NoError. Override in CloudStoreMgr
+     *       to trigger immediate upload of the sealed file.
+     */
+    virtual KvError OnDataFileSealed(const TableIdent &tbl_id, FileId file_id)
+    {
+        (void) tbl_id;
+        (void) file_id;
+        return KvError::NoError;
     }
     /**
      * @brief Get the number of currently open file descriptors.
@@ -680,6 +747,7 @@ public:
     KvError CreateArchive(const TableIdent &tbl_id,
                           std::string_view snapshot,
                           uint64_t ts) override;
+    KvError AbortWrite(const TableIdent &tbl_id) override;
     void CleanManifest(const TableIdent &tbl_id) override;
 
     ObjectStore &GetObjectStore()
@@ -760,6 +828,14 @@ public:
     {
         return process_term_;
     }
+    void OnFileRangeWritePrepared(const TableIdent &tbl_id,
+                                  FileId file_id,
+                                  uint64_t term,
+                                  uint64_t offset,
+                                  std::string_view data) override;
+    // Called when append-mode writing switches away from a data file.
+    // Upload success marks that file clean; failure aborts the write task.
+    KvError OnDataFileSealed(const TableIdent &tbl_id, FileId file_id) override;
 
     std::pair<ManifestFilePtr, KvError> GetManifest(
         const TableIdent &tbl_id) override;
@@ -802,8 +878,34 @@ private:
     KvError DownloadFile(const TableIdent &tbl_id,
                          FileId file_id,
                          uint64_t term = 0);
+    KvError UploadFile(const TableIdent &tbl_id,
+                       std::string filename,
+                       WriteTask *owner,
+                       std::string_view payload = {});
     KvError UploadFiles(const TableIdent &tbl_id,
                         std::vector<std::string> filenames);
+    /**
+     * @brief Read file prefix from disk for upload fallback.
+     *
+     * When in-memory buffered bytes only cover a file tail (e.g., recent
+     * appends), this reads the file prefix [0, prefix_len) from disk directly
+     * into the destination buffer.
+     *
+     * @param tbl_id Table identifier
+     * @param filename File name to read
+     * @param prefix_len Number of bytes to read from file start
+     * @param buffer Destination buffer
+     * @param dst_offset Byte offset in destination buffer to place the prefix
+     *
+     * @return KvError::NoError on success, error code on failure
+     */
+    KvError ReadFilePrefix(const TableIdent &tbl_id,
+                           std::string_view filename,
+                           size_t prefix_len,
+                           DirectIoBuffer &buffer,
+                           size_t dst_offset);
+    DirectIoBuffer AcquireCloudBuffer(KvTask *task);
+    void ReleaseCloudBuffer(DirectIoBuffer buffer);
 
     bool DequeClosedFile(const FileKey &key);
     void EnqueClosedFile(FileKey key);
@@ -901,10 +1003,10 @@ private:
     // will be skipped and the latest manifest term will be used.
     uint64_t process_term_{0};
 
-    size_t inflight_upload_files_{0};
-    WaitingZone upload_slots_waiting_;
     size_t inflight_cloud_slots_{0};
     WaitingZone cloud_slot_waiting_;
+    size_t inflight_cloud_buffers_{0};
+    WaitingZone cloud_buffer_waiting_;
 
     friend class Prewarmer;
     friend class PrewarmService;
