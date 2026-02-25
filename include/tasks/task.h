@@ -48,6 +48,7 @@ enum struct TaskType
     Prewarm,
     ListObject,
     BatchWrite,
+    Reopen,
     BackgroundWrite
 };
 

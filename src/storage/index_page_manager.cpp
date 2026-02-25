@@ -322,6 +322,92 @@ void IndexPageManager::UpdateRoot(const TableIdent &tbl_ident,
     root_meta_mgr_.EvictIfNeeded();
 }
 
+KvError IndexPageManager::InstallExternalSnapshot(const TableIdent &tbl_ident,
+                                                  CowRootMeta &cow_meta)
+{
+    if (Options()->cloud_store_path.empty())
+    {
+        return KvError::InvalidArgs;
+    }
+    auto *cloud_mgr = static_cast<CloudStoreMgr *>(IoMgr());
+
+    auto [root_handle, root_err] = FindRoot(tbl_ident);
+    if (root_err == KvError::NoError)
+    {
+        RootMeta *old_meta = root_handle.Get();
+        if (old_meta != nullptr && old_meta->mapper_ != nullptr)
+        {
+            FilePageId max_fp_id =
+                old_meta->mapper_->FilePgAllocator()->MaxFilePageId();
+            FileId max_file_id = max_fp_id >> Options()->pages_per_file_shift;
+            if (max_file_id <= IouringMgr::LruFD::kMaxDataFile)
+            {
+                uint64_t term = IoMgr()
+                                    ->GetFileIdTerm(tbl_ident, max_file_id)
+                                    .value_or(IoMgr()->ProcessTerm());
+                KvError sync_err = cloud_mgr->SyncDataFileFromRemoteIfNeeded(
+                    tbl_ident, max_file_id, term);
+                if (sync_err != KvError::NoError &&
+                    sync_err != KvError::NotFound)
+                {
+                    return sync_err;
+                }
+            }
+        }
+    }
+
+    auto [manifest, err] = cloud_mgr->RefreshManifest(tbl_ident);
+    CHECK_KV_ERR(err);
+
+    Replayer replayer(Options());
+    err = replayer.Replay(manifest.get());
+    CHECK_KV_ERR(err);
+
+    auto [entry, inserted] = root_meta_mgr_.GetOrCreate(tbl_ident);
+    RootMeta &meta = entry->meta_;
+    auto mapper =
+        replayer.GetMapper(this, &entry->tbl_id_, IoMgr()->ProcessTerm());
+    MappingSnapshot *mapping = mapper->GetMapping();
+    meta.mapping_snapshots_.insert(mapping);
+
+    // Reuse swizzling pointers when file_page_id is unchanged.
+    for (MemIndexPage *page : meta.index_pages_)
+    {
+        PageId page_id = page->GetPageId();
+        if (page_id >= mapping->mapping_tbl_.size())
+        {
+            continue;
+        }
+        uint64_t val = mapping->mapping_tbl_.Get(page_id);
+        if (MappingSnapshot::IsFilePageId(val) &&
+            MappingSnapshot::DecodeId(val) == page->GetFilePageId())
+        {
+            mapping->AddSwizzling(page_id, page);
+        }
+    }
+
+    cow_meta = CowRootMeta();
+    cow_meta.root_id_ = replayer.root_;
+    cow_meta.ttl_root_id_ = replayer.ttl_root_;
+    cow_meta.mapper_ = std::move(mapper);
+    cow_meta.manifest_size_ = replayer.file_size_;
+    cow_meta.next_expire_ts_ = replayer.ttl_root_ != MaxPageId ? 1 : 0;
+    cow_meta.compression_ = std::make_shared<compression::DictCompression>();
+    if (!replayer.dict_bytes_.empty())
+    {
+        cow_meta.compression_->LoadDictionary(std::move(replayer.dict_bytes_));
+    }
+
+    UpdateRoot(tbl_ident, std::move(cow_meta));
+
+    replayer.file_id_term_mapping_->insert_or_assign(
+        IouringMgr::LruFD::kManifest, IoMgr()->ProcessTerm());
+    IoMgr()->SetFileIdTermMapping(entry->tbl_id_,
+                                  replayer.file_id_term_mapping_);
+
+    return KvError::NoError;
+}
+
 std::pair<MemIndexPage::Handle, KvError> IndexPageManager::FindPage(
     MappingSnapshot *mapping, PageId page_id)
 {

@@ -17,6 +17,7 @@
 
 #include "async_io_manager.h"
 #include "tasks/list_object_task.h"
+#include "tasks/reopen_task.h"
 #include "utils.h"
 
 #ifdef ELOQSTORE_WITH_TXSERVICE
@@ -288,6 +289,38 @@ bool Shard::HasPendingTTL(const TableIdent &tbl_id)
 #endif
 }
 
+void Shard::AddPendingLocalGc(const TableIdent &tbl_id)
+{
+    assert(!HasPendingLocalGc(tbl_id));
+    auto it = pending_queues_.find(tbl_id);
+    assert(it != pending_queues_.end());
+    PendingWriteQueue &pending_q = it->second;
+    LocalGcRequest &req = pending_q.local_gc_req_;
+    req.SetTableId(tbl_id);
+#ifdef ELOQSTORE_WITH_TXSERVICE
+    {
+        std::lock_guard<bthread::Mutex> lk(req.mutex_);
+        req.done_ = false;
+    }
+#else
+    req.done_.store(false, std::memory_order_relaxed);
+#endif
+    pending_q.PushBack(&req);
+}
+
+bool Shard::HasPendingLocalGc(const TableIdent &tbl_id)
+{
+    auto it = pending_queues_.find(tbl_id);
+    assert(it != pending_queues_.end());
+    PendingWriteQueue &pending_q = it->second;
+#ifdef ELOQSTORE_WITH_TXSERVICE
+    std::lock_guard<bthread::Mutex> lk(pending_q.local_gc_req_.mutex_);
+    return !pending_q.local_gc_req_.done_;
+#else
+    return !pending_q.local_gc_req_.done_.load(std::memory_order_relaxed);
+#endif
+}
+
 IndexPageManager *Shard::IndexManager()
 {
     return &index_mgr_;
@@ -457,6 +490,14 @@ bool Shard::ProcessReq(KvRequest *req)
         StartTask(task, req, lbd);
         return true;
     }
+    case RequestType::Reopen:
+    {
+        ReopenTask *task = task_mgr_.GetReopenTask(req->TableId());
+        auto lbd = [task, req]() -> KvError
+        { return task->Reopen(req->TableId()); };
+        StartTask(task, req, lbd);
+        break;
+    }
     case RequestType::BatchWrite:
     {
         BatchWriteTask *task = task_mgr_.GetBatchWriteTask(req->TableId());
@@ -529,6 +570,17 @@ bool Shard::ProcessReq(KvRequest *req)
             return false;
         }
         auto lbd = [task]() -> KvError { return task->CompactDataFile(); };
+        StartTask(task, req, lbd);
+        return true;
+    }
+    case RequestType::LocalGc:
+    {
+        BackgroundWrite *task = task_mgr_.GetBackgroundWrite(req->TableId());
+        if (task == nullptr)
+        {
+            return false;
+        }
+        auto lbd = [task]() -> KvError { return task->RunLocalFileGc(); };
         StartTask(task, req, lbd);
         return true;
     }

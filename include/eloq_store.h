@@ -40,12 +40,15 @@ enum class RequestType : uint8_t
     Scan,
     ListObject,
     BatchWrite,
+    Reopen,
     Truncate,
     DropTable,
     Archive,
     Compact,
+    LocalGc,
     CleanExpired,
-    GlobalArchive
+    GlobalArchive,
+    GlobalReopen
 };
 
 inline const char *RequestTypeToString(RequestType type)
@@ -62,6 +65,8 @@ inline const char *RequestTypeToString(RequestType type)
         return "list_object";
     case RequestType::BatchWrite:
         return "batch_write";
+    case RequestType::Reopen:
+        return "reopen";
     case RequestType::Truncate:
         return "truncate";
     case RequestType::DropTable:
@@ -70,10 +75,14 @@ inline const char *RequestTypeToString(RequestType type)
         return "archive";
     case RequestType::Compact:
         return "compact";
+    case RequestType::LocalGc:
+        return "local_gc";
     case RequestType::CleanExpired:
         return "clean_expired";
     case RequestType::GlobalArchive:
         return "global_archive";
+    case RequestType::GlobalReopen:
+        return "global_reopen";
     default:
         return "unknown";
     }
@@ -330,6 +339,16 @@ public:
     WriteRequest *next_{nullptr};
 };
 
+class ReopenRequest : public WriteRequest
+{
+public:
+    RequestType Type() const override
+    {
+        return RequestType::Reopen;
+    }
+    void SetArgs(TableIdent tbl_id);
+};
+
 /**
  * @brief Batch write atomically.
  */
@@ -434,12 +453,37 @@ private:
     friend class EloqStore;
 };
 
+class GlobalReopenRequest : public KvRequest
+{
+public:
+    RequestType Type() const override
+    {
+        return RequestType::GlobalReopen;
+    }
+
+private:
+    std::vector<std::unique_ptr<ReopenRequest>> reopen_reqs_;
+    std::atomic<uint32_t> pending_{0};
+    std::atomic<uint8_t> first_error_{static_cast<uint8_t>(KvError::NoError)};
+
+    friend class EloqStore;
+};
+
 class CompactRequest : public WriteRequest
 {
 public:
     RequestType Type() const override
     {
         return RequestType::Compact;
+    }
+};
+
+class LocalGcRequest : public WriteRequest
+{
+public:
+    RequestType Type() const override
+    {
+        return RequestType::LocalGc;
     }
 };
 
@@ -529,6 +573,7 @@ private:
     bool SendRequest(KvRequest *req);
     void HandleDropTableRequest(DropTableRequest *req);
     void HandleGlobalArchiveRequest(GlobalArchiveRequest *req);
+    void HandleGlobalReopenRequest(GlobalReopenRequest *req);
     KvError CollectTablePartitions(const std::string &table_name,
                                    std::vector<TableIdent> &partitions) const;
     KvError InitStoreSpace();
